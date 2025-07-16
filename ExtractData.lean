@@ -29,17 +29,26 @@ namespace LeanDojo
 The trace of a tactic.
 -/
 structure TacticTrace where
-  stateBefore: String
-  stateAfter: String
+  goalsBefore: Array String
+  goalsAfter: Array String
   pos: String.Pos      -- Start position of the tactic.
   endPos: String.Pos   -- End position of the tactic.
 deriving ToJson
+
+/-
+ Given a current goal tactic state string the next relevant sublemmas/hypothesis to be "have drafted"
+-/
+structure HaveDraft where
+  goal : String
+  haveDrafts : Array String
+  deriving ToJson
 
 /--
 The trace of a Lean file.
 -/
 structure Trace where
   tactics: Array TacticTrace    -- All tactics in the file.
+  haveDrafts : Array HaveDraft   -- All have drafts in the file
 deriving ToJson
 
 
@@ -121,6 +130,41 @@ def ppGoals (ctx : ContextInfo) (goals : List MVarId) : IO String :=
 
 end Pp
 
+open Lean Meta Elab Tactic
+
+def mkCurriedImplication (hyps : List LocalDecl) (goal : Expr) : MetaM Expr := do
+  hyps.foldrM (init := goal) fun hyp acc =>
+    return mkForall hyp.userName hyp.binderInfo hyp.type acc
+
+def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
+  let mctx ← getMCtx
+  let some mdecl := mctx.findDecl? mvarId | return []
+  let lctx := mdecl.lctx
+  Meta.withLCtx lctx mdecl.localInstances do
+    pure <| lctx.foldl (init := []) fun acc decl =>
+      if decl.isAuxDecl || decl.isImplementationDetail then acc else decl :: acc
+
+def syntheticHaveDrafts
+  (goalsBefore : List MVarId)
+  (goalsAfter : List MVarId) : MetaM (List String) := do
+
+  -- Only generate pairs if there was a single goal before
+  match goalsBefore with
+  | [gBefore] =>
+    let hypsBefore ← extractHypsFromGoal gBefore
+
+    let beforeNames := hypsBefore.map (·.userName)
+
+    -- Process each goal after individually
+    goalsAfter.mapM fun gAfter => do
+      let hypsAfter ← extractHypsFromGoal gAfter
+      let newHyps := hypsAfter.filter (fun h => !beforeNames.contains (Lean.LocalDecl.userName h))
+      let goal ← gAfter.getType
+      let imp ← mkCurriedImplication newHyps goal
+      let pp ← ppExpr imp
+      return pp.pretty
+
+  | _ => return []
 
 namespace Path
 
@@ -257,7 +301,6 @@ end Path
 
 namespace Traversal
 
-
 /--
 Extract tactic information from `TacticInfo` in `InfoTree`.
 -/
@@ -282,22 +325,26 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
     | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
       let ctxBefore := { ctx with mctx := ti.mctxBefore }
       let ctxAfter := { ctx with mctx := ti.mctxAfter }
-      let stateBefore ← Pp.ppGoals ctxBefore ti.goalsBefore
-      let stateAfter ← Pp.ppGoals ctxAfter ti.goalsAfter
-      if stateBefore == "no goals" || stateBefore == stateAfter then
+      let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Pp.ppGoal)
+      let goalsAfter ← ctxAfter.runMetaM {} (ti.goalsAfter.toArray.mapM Pp.ppGoal)
+      if goalsBefore == #[] || goalsBefore == goalsAfter then
         pure ()
       else
         let some posBefore := ti.stx.getPos? true | pure ()
         let some posAfter := ti.stx.getTailPos? true | pure ()
+
+        let haveDrafts' ← syntheticHaveDrafts ti.goalsBefore ti.goalsAfter
         match ti.stx with
         | .node _ _ _ =>
           modify fun trace => {
-            trace with tactics := trace.tactics.push {
-              stateBefore := stateBefore,
-              stateAfter := stateAfter,
-              pos := posBefore,
-              endPos := posAfter,
-             }
+            trace with
+              tactics := trace.tactics.push {
+                goalsBefore := goalsBefore,
+                goalsAfter := goalsAfter,
+                pos := posBefore,
+                endPos := posAfter,
+              },
+              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.push ⟨goalsBefore[0]!, haveDrafts'.toArray⟩
           }
         | _ => pure ()
     | _ => pure ()
@@ -399,10 +446,9 @@ unsafe def processFile (path : FilePath) : IO Unit := do
   let commandState := { Command.mkState env messages {} with infoState.enabled := true }
   let s ← IO.processCommands inputCtx parserState commandState
   let env' := s.commandState.env
-  let commands := s.commands.pop -- Remove EOI command.
   let trees := s.commandState.infoState.trees.toArray
 
-  let traceM := (traverseForest trees env').run' ⟨#[]⟩
+  let traceM := (traverseForest trees env').run' ⟨#[], #[]⟩
   let (trace, _) ← traceM.run'.toIO {fileName := s!"{path}", fileMap := FileMap.ofString input} {env := env}
 
   let cwd ← IO.currentDir
