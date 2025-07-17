@@ -56,7 +56,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 # Load the fine-tuned model and tokenizer
-model_path = "byt5-lean-goals"  # Change to full path if necessary
+model_path = "UnluckyOrangutan/byt5-lean-goals"  # Change to full path if necessary
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
 model.eval()
@@ -69,7 +69,7 @@ def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5) -
             max_length=256,
             do_sample=True,
             top_p=0.9,
-            temperature=1.0,
+            temperature=1,
             pad_token_id=tokenizer.pad_token_id
         )
         suggestion = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
@@ -79,6 +79,7 @@ def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5) -
             continue
 
         response = send_command({"tactic": suggestion, "proofState": proof_state})
+        print(response)
         if "error" not in response and "message" not in response:
             return suggestion
     return None
@@ -110,9 +111,9 @@ def run_canonicaldraft(statement):
     while sorry_states:
         sorry_state = sorry_states.pop()
         res = send_command({"tactic" : "canonical", "proofState": sorry_state["proofState"]})
-        if "error" in res:
-            temp = send_command({"tactic" : generate_valid_tactic(sorry_state["goal"], sorry_state["proofState"]), "proofState": sorry_state["proofState"]})
+        if "error" in res or "message" in res:
+            temp = send_command({"tactic" : generate_valid_tactic(sorry_state["goal"], sorry_state["proofState"]), "proofState": sorry_state["proofState"]})["sorries"][0]
             sorry_states.append(temp)
 
 if __name__ == "__main__":
-    run_canonicaldraft("import Mathlib\ntheorem womp : (2:Nat) + 2 = 4 := by sorry")
+    run_canonicaldraft("import Mathlib\ntheorem womp (a b c d e f g h : Nat) : (d + f) + (h + (a + c)) + (g + e + b) = a + b + c + d + e + f + g + h := sorry")

@@ -73,39 +73,16 @@ split = tokenized.train_test_split(test_size=0.05)
 train_ds = split["train"]
 eval_ds = split["test"]
 
-# ========== Step 4: Load Model ==========
+from datasets import Dataset
 
-model = AutoModelForSeq2SeqLM.from_pretrained("google/byt5-small")
+# Convert to HF Dataset object (it already is, but we ensure a clean copy)
+clean_dataset = Dataset.from_dict({
+    "input": dataset["input"],
+    "target": dataset["target"]
+})
 
-# ========== Step 5: Training Arguments ==========
+# Save locally
+clean_dataset.save_to_disk("lean-have-pairs")
 
-training_args = Seq2SeqTrainingArguments(
-    output_dir="./byt5-lean-goals",
-    eval_steps=500,
-    logging_steps=100,
-    save_steps=1000,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
-    num_train_epochs=3,
-    save_total_limit=2,
-    predict_with_generate=True,
-    logging_dir="./logs",
-    report_to="none",
-)
-
-# ========== Step 6: Trainer ==========
-
-trainer = Seq2SeqTrainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_ds,
-    eval_dataset=eval_ds,
-    tokenizer=tokenizer,
-)
-
-trainer.train()
-
-# ========== Step 7: Save Model ==========
-
-trainer.save_model("byt5-lean-goals")
-tokenizer.save_pretrained("byt5-lean-goals")
+# (Optional) Push to Hugging Face Hub
+clean_dataset.push_to_hub("tactic-have-pairs")
