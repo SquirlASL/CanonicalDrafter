@@ -1,6 +1,11 @@
 import Lean
 import Lake
 
+-- example test
+-- lake env lean --run ../CanonicalDrafter/ExtractData.lean Mathlib/Combinatorics/Hindman.lean
+-- cat .lake/build/ir/Mathlib/Combinatorics/Hindman.ast.json
+-- https://github.com/lean-dojo/LeanDojo/issues/247
+
 -- based on https://github.com/lean-dojo/LeanDojo/blob/main/src/lean_dojo/data_extraction/ExtractData.lean from LeanDojo
 -- unlike LeanDojo we only care about tracing tactics so we remove commands and premises to reduce storage cost and increase speed.
 
@@ -115,9 +120,7 @@ private def ppGoal (mvarId : MVarId) : MetaM String := do
       let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
       let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
       let s := s ++ "\n" ++ goalFmt.pretty
-      match mvarDecl.userName with
-      | Name.anonymous => return s
-      | name           => return "case " ++ name.eraseMacroScopes.toString ++ "\n" ++ s
+      return s
 
 
 def ppGoals (ctx : ContextInfo) (goals : List MVarId) : IO String :=
@@ -144,25 +147,48 @@ def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
     pure <| lctx.foldl (init := []) fun acc decl =>
       if decl.isAuxDecl || decl.isImplementationDetail then acc else decl :: acc
 
-def syntheticHaveDrafts
+def haveDrafts
   (goalsBefore : List MVarId)
   (goalsAfter : List MVarId) : MetaM (List String) := do
 
-  -- Only generate pairs if there was a single goal before
   match goalsBefore with
   | [gBefore] =>
-    let hypsBefore ← extractHypsFromGoal gBefore
+    -- get metavariable decl for before
+    let mctx ← getMCtx
+    let some declBefore := mctx.findDecl? gBefore | throwError "unknown mvar {gBefore.name}"
+
+    -- run inside lctx of before
+    let hypsBefore ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
+      extractHypsFromGoal gBefore
 
     let beforeNames := hypsBefore.map (·.userName)
 
-    -- Process each goal after individually
-    goalsAfter.mapM fun gAfter => do
-      let hypsAfter ← extractHypsFromGoal gAfter
+    let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
+      gBefore.getType
+
+    let mut out : List String := []
+
+    for gAfter in goalsAfter do
+      let some declAfter := mctx.findDecl? gAfter | throwError "unknown mvar {gAfter.name}"
+
+      let hypsAfter ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
+        extractHypsFromGoal gAfter
+
       let newHyps := hypsAfter.filter (fun h => !beforeNames.contains (Lean.LocalDecl.userName h))
-      let goal ← gAfter.getType
-      let imp ← mkCurriedImplication newHyps goal
-      let pp ← ppExpr imp
-      return pp.pretty
+
+      let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
+        gAfter.getType
+
+      if goalA == goalB then
+        let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
+          newHyps.mapM (ppExpr ∘ LocalDecl.type)
+        out := out.append (newHypsStrs.map Format.pretty)
+      else
+        let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
+          mkCurriedImplication newHyps goalA
+        out := out.cons (← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ppExpr imp).pretty)
+
+    return out
 
   | _ => return []
 
@@ -333,7 +359,9 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let some posBefore := ti.stx.getPos? true | pure ()
         let some posAfter := ti.stx.getTailPos? true | pure ()
 
-        let haveDrafts' ← syntheticHaveDrafts ti.goalsBefore ti.goalsAfter
+
+        let haveDrafts' ← ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter)
+
         match ti.stx with
         | .node _ _ _ =>
           modify fun trace => {
