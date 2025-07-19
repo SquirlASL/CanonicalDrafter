@@ -360,7 +360,11 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let some posAfter := ti.stx.getTailPos? true | pure ()
 
 
-        let haveDrafts' ← ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter)
+        let haveDrafts' ← try
+          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter)
+        catch e =>
+          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
+          pure []  -- or use `pure []` if it's a list
 
         match ti.stx with
         | .node _ _ _ =>
