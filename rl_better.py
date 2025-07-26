@@ -119,8 +119,9 @@ def run_canonicaldraft(statement, max_depth=20, max_iterations=40):
             proof_states.pop()
             continue
         proof_state = proof_states[-1]
-        res = send_command({"tactic" : "canonical", "proofState": proof_state["proofState"]})
-        if "error" in res or "message" in res:
+        res = send_command({"tactic" : "try tauto; try ring; try linarith; canonical", "proofState": proof_state["proofState"]})
+        print(res)
+        if "error" in res or "message" in res and res["message"] != "no goals":
             gen = generate_valid_tactic(proof_state["goal"], proof_state["proofState"])
             if gen != None:
                 temp = gen[1]["sorries"][0]
