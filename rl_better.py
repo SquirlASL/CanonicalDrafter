@@ -56,7 +56,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 # Load the fine-tuned model and tokenizer
-model_path = "UnluckyOrangutan/byt5-lean-goals"  # Change to full path if necessary
+model_path = "UnluckyOrangutan/byt5-tactic-haveDraft"  # Change to full path if necessary
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
 model.eval()
@@ -66,7 +66,7 @@ def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5) -
         inputs = tokenizer(tactic_state, return_tensors="pt")
         outputs = model.generate(
             **inputs,
-            max_length=256,
+            max_length=512,
             do_sample=True,
             top_p=0.9,
             temperature=1,
@@ -75,13 +75,15 @@ def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5) -
         suggestion = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
         print(f"[Attempt {attempt + 1}] Suggestion: {suggestion!r}")
 
-        if not suggestion.startswith(("have", "let", "suffices")):
-            continue
+        try:
+            draft = json.loads(suggestion)[0]
+        except:
+            return None
 
-        response = send_command({"tactic": suggestion, "proofState": proof_state})
-        print(response)
+        response = send_command({"tactic": f"have : {draft} := by sorry", "proofState": proof_state})
+        
         if "error" not in response and "message" not in response:
-            return suggestion
+            return draft, response
     return None
 
 def send_command(command):
@@ -102,18 +104,39 @@ lol = send_command({ "cmd" : "import Canonical\nimport Mathlib\n" })
 print(lol)
 env_import = lol["env"]
 print(env_import)
-def run_canonicaldraft(statement):
+def run_canonicaldraft(statement, max_depth=20, max_iterations=40):
     header, stmt_body = split_proof_header(statement)
     print(stmt_body)
     root = send_command({"cmd" : stmt_body, "env": env_import})
     print(root)
-    sorry_states : List[Any] = [root["sorries"][0]]
-    while sorry_states:
-        sorry_state = sorry_states.pop()
-        res = send_command({"tactic" : "canonical", "proofState": sorry_state["proofState"]})
+    proof_states : List[Any] = [root["sorries"][0]]
+    iteration = 0
+    while proof_states:
+        print(proof_states)
+        if iteration >= max_iterations:
+            return False
+        if len(proof_states) >= max_depth:
+            proof_states.pop()
+            continue
+        proof_state = proof_states[-1]
+        res = send_command({"tactic" : "canonical", "proofState": proof_state["proofState"]})
         if "error" in res or "message" in res:
-            temp = send_command({"tactic" : generate_valid_tactic(sorry_state["goal"], sorry_state["proofState"]), "proofState": sorry_state["proofState"]})["sorries"][0]
-            sorry_states.append(temp)
+            gen = generate_valid_tactic(proof_state["goal"], proof_state["proofState"])
+            if gen != None:
+                temp = gen[1]["sorries"][0]
+                temp["new_parent_proofState"] = gen[1]["proofState"]
+                temp["new_parent_goal"] = gen[1]["goals"][0]
+                proof_states.append(temp)
+        else:
+            proof_states.pop()
+            if len(proof_states) >= 1:
+                parent_state = proof_states[-1]
+                # change parent proofstate to include drafted have statement
+                parent_state["proofState"] = proof_state["new_parent_proofState"]
+                parent_state["goal"] = proof_state["new_parent_goal"]
+        iteration += 1
+    return True      
 
 if __name__ == "__main__":
-    run_canonicaldraft("import Mathlib\ntheorem womp (a b c d e f g h : Nat) : (d + f) + (h + (a + c)) + (g + e + b) = a + b + c + d + e + f + g + h := sorry")
+    q = run_canonicaldraft("import Mathlib\ntheorem womp (a b c d e f g h : Nat) : (d + f) + (h + (a + c)) + (g + e + b) = a + b + c + d + e + f + g + h := sorry")
+    print(q)
