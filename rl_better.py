@@ -104,7 +104,7 @@ lol = send_command({ "cmd" : "import Canonical\nimport Mathlib\n" })
 print(lol)
 env_import = lol["env"]
 print(env_import)
-def run_canonicaldraft(statement, max_depth=20, max_iterations=40):
+def run_canonicaldraft(statement, max_depth=20, max_iterations=40, tactics=["tauto", "ring", "linarith", "canonical"]):
     header, stmt_body = split_proof_header(statement)
     print(stmt_body)
     root = send_command({"cmd" : stmt_body, "env": env_import})
@@ -112,16 +112,23 @@ def run_canonicaldraft(statement, max_depth=20, max_iterations=40):
     proof_states : List[Any] = [root["sorries"][0]]
     iteration = 0
     while proof_states:
-        print(proof_states)
+        # print(proof_states)
         if iteration >= max_iterations:
             return False
         if len(proof_states) >= max_depth:
             proof_states.pop()
             continue
         proof_state = proof_states[-1]
-        res = send_command({"tactic" : "try tauto; try ring; try linarith; canonical", "proofState": proof_state["proofState"]})
-        print(res)
-        if "error" in res or "message" in res and res["message"] != "no goals":
+        print("------")
+        print(proof_state["goal"])
+        flag = False
+        for tactic in tactics:
+            res = send_command({"tactic" : tactic, "proofState": proof_state["proofState"]})
+            # print(tactic, res)
+            if not ("error" in res or "message" in res and res["message"] != "no goals" or "proofStatus" in res and res["proofStatus"] != "Completed"):
+                flag = True
+                break
+        if not flag:
             gen = generate_valid_tactic(proof_state["goal"], proof_state["proofState"])
             if gen != None:
                 temp = gen[1]["sorries"][0]
