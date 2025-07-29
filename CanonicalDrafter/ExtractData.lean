@@ -45,7 +45,7 @@ deriving ToJson
 -/
 structure HaveDraft where
   goal : String
-  haveDrafts : Array String
+  haveDraft : String
   deriving ToJson
 
 /--
@@ -68,7 +68,7 @@ private def addLine (s : String) : String :=
 
 
 -- Similar to `Meta.ppGoal` but uses String instead of Format to make sure local declarations are separated by "\n".
-private def ppGoal (mvarId : MVarId) : MetaM String := do
+private def ppGoal (mvarId : MVarId) (additionalHyps : List LocalDecl := []): MetaM String := do
   match (← getMCtx).findDecl? mvarId with
   | none          => return "unknown goal"
   | some mvarDecl =>
@@ -116,11 +116,16 @@ private def ppGoal (mvarId : MVarId) : MetaM String := do
            return (varNames, prevType?, s)
          else
            ppVars varNames prevType? s localDecl
-      let s ← pushPending varNames type? s
+      let mut varNames := varNames
+      let mut type? := type?
+      let mut s := s
+      for addHyp in additionalHyps do
+        (varNames, type?, s) ← ppVars varNames type? s addHyp
+      let s' ← pushPending varNames type? s
       let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
       let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
-      let s := s ++ "\n" ++ goalFmt.pretty
-      return s
+      let s' := s' ++ "\n" ++ goalFmt.pretty
+      return s'
 
 
 def ppGoals (ctx : ContextInfo) (goals : List MVarId) : IO String :=
@@ -149,7 +154,7 @@ def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
 
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) : MetaM (List String) := do
+  (goalsAfter : List MVarId) : MetaM (List HaveDraft) := do
 
   match goalsBefore with
   | [gBefore] =>
@@ -166,7 +171,7 @@ def haveDrafts
     let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
       gBefore.getType
 
-    let mut out : List String := []
+    let mut out : List HaveDraft := []
 
     for gAfter in goalsAfter do
       let some declAfter := mctx.findDecl? gAfter | throwError "unknown mvar {gAfter.name}"
@@ -182,11 +187,11 @@ def haveDrafts
       if goalA == goalB then
         let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           newHyps.mapM (ppExpr ∘ LocalDecl.type)
-        out := out.append (newHypsStrs.map Format.pretty)
+        out := out.append (← newHypsStrs.enum.mapM (fun (i, x) => do return ⟨← Pp.ppGoal gBefore (newHyps.take i), Format.pretty x⟩))
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           mkCurriedImplication newHyps goalA
-        out := out.cons (← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ppExpr imp).pretty)
+        out := out.cons ⟨← Pp.ppGoal gBefore, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ppExpr imp).pretty⟩
 
     return out
 
@@ -376,7 +381,7 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
                 pos := posBefore,
                 endPos := posAfter,
               },
-              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.push ⟨goalsBefore[0]!, haveDrafts'.toArray⟩
+              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append haveDrafts'.toArray
           }
         | _ => pure ()
     | _ => pure ()
