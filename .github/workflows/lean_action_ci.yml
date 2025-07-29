@@ -8,8 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    run:
-      working-directory: CanonicalDrafter
+    defaults:
+      run:
+        working-directory: CanonicalDrafter
 
     steps:
       - uses: actions/checkout@v4
