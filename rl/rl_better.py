@@ -4,6 +4,8 @@ import os
 import sys
 from typing import List, Any
 
+from generators import byt5_generate, qwen_coder_generate
+
 def split_proof_header(proof: str) -> tuple[str, str]:
     """
     From https://github.com/project-numina/kimina-lean-server/blob/069576742afb4ca6c086898787a0e91abf91893c/utils/proof_utils.py#L6
@@ -45,6 +47,7 @@ def split_proof_header(proof: str) -> tuple[str, str]:
 
 process = subprocess.Popen(
     ["lake", "env", "repl/.lake/build/bin/repl"],
+    cwd="CanonicalDrafter",
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
     text=True,
@@ -52,38 +55,19 @@ process = subprocess.Popen(
     env=os.environ,
 )
 
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
-
-# Load the fine-tuned model and tokenizer
-model_path = "UnluckyOrangutan/byt5-tactic-haveDraft"  # Change to full path if necessary
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
-model.eval()
-
-def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5) -> str:
+def generate_valid_tactic(tactic_state: str, proof_state: Any, max_attempts=5, generate: callable = qwen_coder_generate) -> str:
     for attempt in range(max_attempts):
-        inputs = tokenizer(tactic_state, return_tensors="pt")
-        outputs = model.generate(
-            **inputs,
-            max_length=512,
-            do_sample=True,
-            top_p=0.9,
-            temperature=1,
-            pad_token_id=tokenizer.pad_token_id
-        )
-        suggestion = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        suggestion = generate(tactic_state)
         print(f"[Attempt {attempt + 1}] Suggestion: {suggestion!r}")
 
-        try:
-            draft = json.loads(suggestion)[0]
-        except:
-            return None
+        if not suggestion:
+            print("Model failed to propose a valid expr.")
+            continue
 
-        response = send_command({"tactic": f"have : {draft} := by sorry", "proofState": proof_state})
+        response = send_command({"tactic": f"have : {suggestion} := by sorry", "proofState": proof_state})
         
         if "error" not in response and "message" not in response:
-            return draft, response
+            return suggestion, response
     return None
 
 def send_command(command):
@@ -117,7 +101,7 @@ lol = send_command({ "cmd" : "import Canonical\nimport Mathlib\n" })
 print(lol)
 env_import = lol["env"]
 print(env_import)
-def run_canonicaldraft(statement, max_depth=5, max_iterations=40, tactics=["tauto", "ring", "linarith", "exact?", "nlinarith"]):
+def run_canonicaldraft(statement, max_depth=2, max_iterations=40, tactics=["ring", "linarith"]):
     header, stmt_body = split_proof_header(statement)
     print(stmt_body)
     root = send_command({"cmd" : stmt_body, "env": env_import})
@@ -128,7 +112,7 @@ def run_canonicaldraft(statement, max_depth=5, max_iterations=40, tactics=["taut
         # print(proof_states)
         if iteration >= max_iterations:
             return False
-        if len(proof_states) >= max_depth:
+        if len(proof_states) > max_depth:
             proof_states.pop()
             continue
         proof_state = proof_states[-1]
