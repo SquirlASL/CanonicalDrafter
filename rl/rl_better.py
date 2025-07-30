@@ -100,11 +100,24 @@ def send_command(command):
 
     return json.loads("".join(response_lines))
 
+def close_goal(proof_state, tactics):
+    # special logic for canonical
+    res = send_command({"tactic" : "canonical", "proofState": proof_state["proofState"]})
+    print("canonical", res)
+    if not "message" in res:
+        return True
+    
+    for tactic in tactics:
+        res = send_command({"tactic" : tactic, "proofState": proof_state["proofState"]})
+        print(tactic, res)
+        if not ("error" in res or "message" in res and res["message"] != "no goals" or "proofStatus" in res and res["proofStatus"] != "Completed"):
+            return True
+
 lol = send_command({ "cmd" : "import Canonical\nimport Mathlib\n" })
 print(lol)
 env_import = lol["env"]
 print(env_import)
-def run_canonicaldraft(statement, max_depth=20, max_iterations=40, tactics=["tauto", "ring", "linarith", "canonical"]):
+def run_canonicaldraft(statement, max_depth=5, max_iterations=40, tactics=["tauto", "ring", "linarith", "exact?", "nlinarith"]):
     header, stmt_body = split_proof_header(statement)
     print(stmt_body)
     root = send_command({"cmd" : stmt_body, "env": env_import})
@@ -121,14 +134,7 @@ def run_canonicaldraft(statement, max_depth=20, max_iterations=40, tactics=["tau
         proof_state = proof_states[-1]
         print("------")
         print(proof_state["goal"])
-        flag = False
-        for tactic in tactics:
-            res = send_command({"tactic" : tactic, "proofState": proof_state["proofState"]})
-            # print(tactic, res)
-            if not ("error" in res or "message" in res and res["message"] != "no goals" or "proofStatus" in res and res["proofStatus"] != "Completed"):
-                flag = True
-                break
-        if not flag:
+        if not close_goal(proof_state, tactics):
             gen = generate_valid_tactic(proof_state["goal"], proof_state["proofState"])
             if gen != None:
                 temp = gen[1]["sorries"][0]
@@ -146,5 +152,6 @@ def run_canonicaldraft(statement, max_depth=20, max_iterations=40, tactics=["tau
     return True      
 
 if __name__ == "__main__":
-    q = run_canonicaldraft("import Mathlib\ntheorem womp (a b c d e f g h : Nat) : (d + f) + (h + (a + c)) + (g + e + b) = a + b + c + d + e + f + g + h := sorry")
-    print(q)
+    proofs = ["import Mathlib\ntheorem womp (a b c d e f g h : Nat) : (d + f) + (h + (a + c)) + (g + e + b) = a + b + c + d + e + f + g + h := sorry", "import Mathlib\ntheorem q.le_mul_right (a b : Nat) (h : a * b ≠ 0) : a ≤ (a * b) := sorry"]
+    for proof in proofs:
+        print(run_canonicaldraft(proof))
