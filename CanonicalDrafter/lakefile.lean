@@ -14,4 +14,5 @@ require "chasenorman" / "Canonical"
 require REPL from git "https://github.com/leanprover-community/repl" @ "v4.21.0"
 
 lean_lib CanonicalDrafter where
-  -- Your library code here if needed
+  -- Add ExtractData to the library
+  roots := #[`CanonicalDrafter, `ExtractData]

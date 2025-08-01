@@ -323,8 +323,8 @@ def findLean (mod : Name) : IO FilePath := do
   let mut path := FilePath.mk lean |>.withExtension "lean"
   let leanLib ← getLibDir (← getBuildDir)
   if let some p := relativeTo path leanLib then
-    path := packagesDir / "lean4/src/lean" / p
-  assert! ← path.pathExists
+    path := packagesDir / "lean4" / "src" / "lean" / p
+  --assert! ← path.pathExists
   return path
 
 end Path
@@ -466,7 +466,7 @@ def getImports (header: TSyntax `Lean.Parser.Module.header) : IO String := do
 Trace a *.lean file.
 -/
 unsafe def processFile (path : FilePath) : IO Unit := do
-  println! path
+  --println! path
   let input ← IO.FS.readFile path
   enableInitializersExecution
   let inputCtx := Parser.mkInputContext input path.toString
@@ -490,11 +490,13 @@ unsafe def processFile (path : FilePath) : IO Unit := do
 
   let cwd ← IO.currentDir
   assert! cwd.fileName != "lean4"
-
   let some relativePath := Path.relativeTo path cwd | throw $ IO.userError s!"Invalid path: {path}"
   let json_path := Path.toBuildDir "ir" relativePath "ast.json" |>.get!
   Path.makeParentDirs json_path
   IO.FS.writeFile json_path (toJson trace).pretty
+  -- This is for ExtractProof.lean
+  let new_path := path.withExtension "ast.json"
+  IO.FS.writeFile new_path (toJson trace).pretty
 
   let dep_path := Path.toBuildDir "ir" relativePath "dep_paths" |>.get!
   Path.makeParentDirs dep_path
@@ -549,9 +551,9 @@ def processAllFiles (noDeps : Bool) : IO Unit := do
       | Except.ok _ => pure ()
 
 
-unsafe def main (args : List String) : IO Unit := do
-  match args with
-  | ["noDeps"] => processAllFiles (noDeps := true)
-  | [path] => processFile (← Path.toAbsolute ⟨path⟩)
-  | [] => processAllFiles (noDeps := false)
-  | _ => throw $ IO.userError "Invalid arguments"
+--unsafe def main (args : List String) : IO Unit := do
+--  match args with
+--  | ["noDeps"] => processAllFiles (noDeps := true)
+--  | [path] => processFile (← Path.toAbsolute ⟨path⟩)
+--  | [] => processAllFiles (noDeps := false)
+--  | _ => throw $ IO.userError "Invalid arguments"
