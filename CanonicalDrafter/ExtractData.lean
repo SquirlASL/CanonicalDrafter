@@ -38,12 +38,14 @@ structure TacticTrace where
   goalsAfter: Array String
   pos: String.Pos      -- Start position of the tactic.
   endPos: String.Pos   -- End position of the tactic.
+  tactic: String       -- The actual tactic text.
 deriving ToJson
 
 /-
  Given a current goal tactic state string the next relevant sublemmas/hypothesis to be "have drafted"
 -/
 structure HaveDraft where
+  tactic : String
   goal : String
   haveDraft : String
   deriving ToJson
@@ -156,7 +158,7 @@ open Lean Meta in
 
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) : MetaM (Array HaveDraft) := do
+  (goalsAfter : List MVarId) : MetaM (Array (String × String)) := do
 
   match goalsBefore with
   | [gBefore] =>
@@ -173,7 +175,7 @@ def haveDrafts
     let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
       gBefore.getType
 
-    let mut out : Array HaveDraft := #[]
+    let mut out : Array (String × String) := #[]
     let mut drafts : Array Expr := #[]
 
     for gAfter in goalsAfter do
@@ -374,10 +376,12 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let some posBefore := ti.stx.getPos? true | pure ()
         let some posAfter := ti.stx.getTailPos? true | pure ()
 
+        -- Extract the actual tactic text from the source
+        let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
         let haveDrafts' ← try
           ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter)
-        catch e =>
+        catch _ =>
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
           pure #[]
 
@@ -390,14 +394,19 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
                 goalsAfter := goalsAfter,
                 pos := posBefore,
                 endPos := posAfter,
+                tactic := tacticText,
               },
-              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append haveDrafts'
+              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, y) => {
+                goal := x,
+                haveDraft := y,
+                tactic := tacticText,
+              })),
           }
         | _ => pure ()
     | _ => pure ()
   | _ => pure ()
 
-private def visitInfo (ctx : ContextInfo) (i : Info) (parent : InfoTree) (env : Environment) : TraceM Unit := do
+private def visitInfo (ctx : ContextInfo) (i : Info) (parent : InfoTree) (_ : Environment) : TraceM Unit := do
   match i with
   | .ofTacticInfo ti => visitTacticInfo ctx ti parent
   | _ => pure ()
