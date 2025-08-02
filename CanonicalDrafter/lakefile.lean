@@ -15,3 +15,5 @@ require REPL from git "https://github.com/leanprover-community/repl" @ "v4.21.0"
 
 lean_lib CanonicalDrafter where
   -- Your library code here if needed
+
+lean_lib Test where
