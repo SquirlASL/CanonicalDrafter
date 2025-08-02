@@ -7,23 +7,68 @@ tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
 model.eval()
 
-def byt5_generate(input: str, max_length: int = 512) -> str:
-    inputs = tokenizer(input, return_tensors="pt")
-    outputs = model.generate(
-        **inputs,
-        max_length=max_length,
-        do_sample=True,
-        top_p=0.9,
-        temperature=0.9,
-        pad_token_id=tokenizer.pad_token_id
-    )
-    out = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
-    try:
-        draft = json.loads(out)[0]
-        return draft
-    except json.JSONDecodeError:
-        print(f"Failed to decode JSON from model output: {out}")
-        return None
+from typing import Dict, List, Optional
+
+_beam_cache: Dict[str, List[str]] = {}
+_beam_index: Dict[str, int] = {}
+
+def byt5_generate(
+    input: str,
+    max_length: int = 512,
+    num_beams: int = 5,
+    forbidden: Optional[List[str]] = None
+) -> Optional[str]:
+    global _beam_cache, _beam_index
+
+    if forbidden is None:
+        forbidden = []
+
+    seen_outputs = set(_beam_cache.get(input, []) + forbidden)
+
+    while True:
+        # Try current cache
+        beams = _beam_cache.get(input, [])
+        index = _beam_index.get(input, 0)
+
+        while index < len(beams):
+            candidate = beams[index]
+            _beam_index[input] = index + 1
+            if candidate not in seen_outputs:
+                try:
+                    result = json.loads(candidate)[0]
+                    return result
+                except json.JSONDecodeError:
+                    print(f"Failed to decode JSON from beam output: {candidate}")
+                    seen_outputs.add(candidate)
+            index += 1
+
+        # If we're here, we need new beams
+        inputs = tokenizer(input, return_tensors="pt")
+        outputs = model.generate(
+            **inputs,
+            max_length=max_length,
+            do_sample=False,
+            num_beams=num_beams,
+            num_return_sequences=num_beams,
+            early_stopping=True,
+            pad_token_id=tokenizer.pad_token_id
+        )
+
+        decoded = [
+            tokenizer.decode(o, skip_special_tokens=True).strip()
+            for o in outputs
+        ]
+
+        # Filter out duplicates and forbidden outputs
+        new_beams = [beam for beam in decoded if beam not in seen_outputs]
+        if not new_beams:
+            print("All new beams were forbidden or seen — regenerating...")
+            continue  # try generating again
+
+        # Update cache
+        _beam_cache[input] = beams + new_beams
+        _beam_index[input] = len(beams)
+
 
 
 # --- claude ----
@@ -104,18 +149,16 @@ import json
 qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Coder-7B-Instruct", trust_remote_code=True)
 qwen_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Coder-7B-Instruct", trust_remote_code=True).eval()
 
-if torch.cuda.is_available():
-    model = model.cuda()
-
 SYSTEM_PROMPT_QWEN = """\
 **Important:**
 Do **not** draft immediately upon receiving this prompt.
 First, wait until you receive the **current open goal** to work on.
-Only after seeing the goal should you propose your first draft lemma using haveDraft.
+Then, before proposing any lemma, you must **analyze the goal** and consider what **nontrivial intermediate step** would meaningfully advance the proof.
+Only after this thinking step should you respond with a draft lemma using `haveDraft`.
 
 ---
 
-You are an AI assistant specialized in Lean 4 proof search, completing proofs by **drafting intermediate lemmas** using have : <expr> := by sorry.
+You are an AI assistant specialized in Lean 4 proof search, completing proofs by **drafting intermediate lemmas** using `have : <expr> := by sorry`.
 
 Your input will be the textual representation of the current goal state in Lean 4.
 
@@ -123,17 +166,18 @@ Your input will be the textual representation of the current goal state in Lean 
 
 ## 🛠 Tool: haveDraft
 
-* Your task is to provide the **type expression** <expr> for the next have statement.
-* The system will insert have : <expr> := by sorry into the **current open goal** (the most recently generated open goal).
-* After insertion, an automated tactic "hammer" will close any solvable goals.
-* Because of this, **you must only draft nontrivial intermediate lemmas** necessary to make progress.
-* You never specify tactics or target a particular goal explicitly — always draft at the most recent open goal.
+* Your task is to provide the **type expression** `<expr>` for the next `have` statement.
+* The system will insert `have : <expr> := by sorry` into the **current open goal** (the most recently generated open goal).
+* After insertion, an automated tactic `"hammer"` will attempt to close any solvable goals.
+* Because of this, you must **only draft nontrivial intermediate lemmas** that are necessary to make progress.
+* You **never specify tactics** or **target goals explicitly** — always draft for the most recent open goal.
+* Do not repeat known facts or assumptions unless rephrasing them enables a key deduction.
 
 ---
 
 ## 📥 Tool Call Format
 
-Respond ONLY with a single JSON object formatted exactly as:
+Respond **only** with a single JSON object in this format:
 
 ```json
 {
@@ -142,6 +186,7 @@ Respond ONLY with a single JSON object formatted exactly as:
     "expr": "<Lean expression>"
   }
 }
+```
 """
 
 def qwen_coder_generate(tactic_state: str, max_length=512) -> dict:

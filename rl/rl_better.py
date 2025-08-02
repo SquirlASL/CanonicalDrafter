@@ -101,29 +101,34 @@ lol = send_command({ "cmd" : "import Canonical\nimport Mathlib\n" })
 print(lol)
 env_import = lol["env"]
 print(env_import)
-def run_canonicaldraft(statement, max_depth=2, max_iterations=40, tactics=["ring", "linarith"]):
+def run_canonicaldraft(statement, max_depth=2, max_iterations=40, max_branch=3, tactics=["ring", "linarith"]):
     header, stmt_body = split_proof_header(statement)
     print(stmt_body)
     root = send_command({"cmd" : stmt_body, "env": env_import})
     print(root)
+    root["sorries"][0]["checked"] = False
     proof_states : List[Any] = [root["sorries"][0]]
     iteration = 0
+    branch = 0
     while proof_states:
         # print(proof_states)
         if iteration >= max_iterations:
             return False
-        if len(proof_states) > max_depth:
-            proof_states.pop()
-            continue
+        print("proofstates:", [pf["goal"] for pf in proof_states])
         proof_state = proof_states[-1]
         print("------")
         print(proof_state["goal"])
-        if not close_goal(proof_state, tactics):
+        if proof_state["checked"] or not close_goal(proof_state, tactics):
+            proof_state["checked"] = True
             gen = generate_valid_tactic(proof_state["goal"], proof_state["proofState"])
+            if len(proof_states) >= max_depth:
+                proof_states.pop()
+                continue
             if gen != None:
                 temp = gen[1]["sorries"][0]
                 temp["new_parent_proofState"] = gen[1]["proofState"]
                 temp["new_parent_goal"] = gen[1]["goals"][0]
+                temp["checked"] = False
                 proof_states.append(temp)
         else:
             proof_states.pop()
@@ -132,7 +137,9 @@ def run_canonicaldraft(statement, max_depth=2, max_iterations=40, tactics=["ring
                 # change parent proofstate to include drafted have statement
                 parent_state["proofState"] = proof_state["new_parent_proofState"]
                 parent_state["goal"] = proof_state["new_parent_goal"]
+                parent_state["checked"] = False
         iteration += 1
+        branch += 1
     return True      
 
 if __name__ == "__main__":
