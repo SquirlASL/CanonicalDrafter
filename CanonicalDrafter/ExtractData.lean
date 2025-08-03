@@ -344,6 +344,29 @@ end Path
 
 namespace Traversal
 
+partial def getSubNodePositions (infotree : InfoTree) (startPos : String.Pos) (endPos : String.Pos) (ctx? : Option ContextInfo) : IO (List MVarId) := do
+  match infotree with
+  | .context ctx t => getSubNodePositions t startPos endPos (ctx.mergeIntoOuter? ctx?)
+  | .node info children =>
+    match info.stx.getRange? with
+    | some r =>
+      match ctx? with
+      | some ctx =>
+        let flag ← ctx.runMetaM {} try
+          match info with
+          | .ofTacticInfo  info =>
+            return info.goalsBefore
+          | _                   => return []
+        catch _ =>
+          pure []
+        if (startPos < r.start ∨ r.stop < endPos) ∧ flag != [] then
+          return flag
+        else
+          return (← (children.mapM (getSubNodePositions · startPos endPos ctx?))).toList.foldr (· ++ ·) []
+      | none => pure []
+    | none => pure []
+  | .hole mvarId => pure []
+
 /--
 Extract tactic information from `TacticInfo` in `InfoTree`.
 -/
@@ -363,7 +386,7 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
   | _ => pure ()
 
   match parent with
-  | .node (Info.ofTacticInfo i) _ =>
+  | .node (Info.ofTacticInfo i) children =>
     match i.stx.getKind with
     | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
       let ctxBefore := { ctx with mctx := ti.mctxBefore }
@@ -403,6 +426,42 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
               })),
           }
         | _ => pure ()
+    | ``Lean.Parser.Tactic.induction =>
+      IO.println "induction found"
+      match i.stx.getRange? with
+      | some r =>
+        let goalsAfter' ← getSubNodePositions parent r.start r.stop ctx
+        let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Pp.ppGoal)
+        let ctxBefore := { ctx with mctx := ti.mctxBefore }
+        let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Pp.ppGoal)
+        let some posBefore := ti.stx.getPos? true | pure ()
+        let some posAfter := ti.stx.getTailPos? true | pure ()
+
+        let haveDrafts' ← try
+          ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter')
+        catch _ =>
+          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
+          pure #[]
+
+        let tacticText := ctx.fileMap.source.extract posBefore posAfter
+
+        modify fun trace => {
+          trace with
+            tactics := trace.tactics.push {
+              goalsBefore := goalsBefore,
+              goalsAfter := goalsAfter.toArray,
+              pos := posBefore,
+              endPos := posAfter,
+              tactic := tacticText
+            },
+            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, y) => {
+              goal := x,
+              haveDraft := y,
+              tactic := tacticText,
+            })),
+        }
+      | none => pure ()
+      pure ()
     | _ => pure ()
   | _ => pure ()
 
