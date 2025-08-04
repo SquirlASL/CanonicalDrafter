@@ -3,6 +3,8 @@ import os
 from datasets import Dataset
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+import shutil
+import subprocess
 
 root = "/home/frederick/mathlib4"
 initial_path = f"{root}/Mathlib.lean"
@@ -17,20 +19,20 @@ submitted = 0
 
 def process(path):
     rel_path = path[len(root):-len(".lean")]
-    prefix = f"{root}/.lake/build/ir/{rel_path}"
+    prefix = f".lake/build/ir/{rel_path}"
 
     local_pairs = []
     new_paths = []
 
     try:
-        with open(prefix + ".ast.json", "r") as f:
+        with open(root + "/" + prefix + ".ast.json", "r") as f:
             data = json.load(f)
             local_pairs = data.get("haveDrafts", [])
     except FileNotFoundError:
         pass
 
     try:
-        with open(prefix + ".dep_paths", "r") as f:
+        with open(root + "/" + prefix + ".dep_paths", "r") as f:
             content = f.read()
             if content:
                 new_paths = content.split("\n")
@@ -39,6 +41,15 @@ def process(path):
 
     return path, local_pairs, new_paths
 
+# shutil.copy2('CanonicalDrafter/ExtractData.lean', root)
+
+# # result = subprocess.run(
+# #     ["lake", "env", "lean", "--run", "ExtractData.lean"], 
+# #     capture_output=True, 
+# #     text=True,
+# #     cwd=root
+# # )
+# # print(result.stdout)
 
 with ThreadPoolExecutor(max_workers=os.cpu_count() * 2) as executor:
     futures = {}
@@ -74,7 +85,7 @@ print(f"Total files processed: {count}")
 print(f"Total havePairs collected: {len(all_have_pairs)}")
 
 if all_have_pairs:
-    Dataset.from_list(all_have_pairs).save_to_disk("../have_pairs_dataset")
-    print("Dataset saved to ../have_pairs_dataset")
+    Dataset.from_list(all_have_pairs).save_to_disk("./haveDrafts_dataset2")
+    print("Dataset saved to ./haveDrafts_dataset2")
 else:
     print("No havePairs found. Dataset not saved.")
