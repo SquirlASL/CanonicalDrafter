@@ -46,6 +46,7 @@ deriving ToJson
 -/
 structure HaveDraft where
   tactic : String
+  name : String
   goal : String
   haveDraft : String
   deriving ToJson
@@ -75,7 +76,7 @@ def applyOptions : Options → Options :=
   (pp.unicode.fun.set · true))))
 
 -- Similar to `Meta.ppGoal` but uses String instead of Format to make sure local declarations are separated by "\n".
-private def ppGoal (mvarId : MVarId) (additionalHyps : Array Expr := #[]): MetaM String := do
+private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #[]): MetaM String := do
   MonadWithOptions.withOptions applyOptions do
     match (← getMCtx).findDecl? mvarId with
     | none          => return "unknown goal"
@@ -128,8 +129,8 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array Expr := #[]): MetaM
         let mut type? := type?
         let mut s ← pushPending varNames type? s
         for addHyp in additionalHyps do
-          let name ← mkFreshUserName `synth
-          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Meta.ppExpr addHyp).pretty
+          let name := lctx.getUnusedName addHyp.1
+          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Meta.ppExpr addHyp.2).pretty
         let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
         let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
         let s' := s ++ "\n" ++ goalFmt.pretty
@@ -162,9 +163,12 @@ def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
 
 open Lean Meta in
 
+/-
+ returns tuple and Array of (goal, name, type)
+-/
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) : MetaM (Array (String × String)) := do
+  (goalsAfter : List MVarId) : MetaM (Array (String × String × String)) := do
 
   match goalsBefore with
   | [gBefore] =>
@@ -181,15 +185,14 @@ def haveDrafts
     let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
       gBefore.getType
 
-    let mut out : Array (String × String) := #[]
-    let mut drafts : Array Expr := #[]
+    let mut out : Array (String × String × String) := #[]
+    let mut drafts : Array (Name × Expr) := #[]
 
     for gAfter in goalsAfter do
       let some declAfter := mctx.findDecl? gAfter | throwError "unknown mvar {gAfter.name}"
 
       let hypsAfter ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
         extractHypsFromGoal gAfter
-
 
       let newHyps ← hypsAfter.filterM fun h => do
         let isOld ← beforeTypes.anyM fun b => do
@@ -199,17 +202,19 @@ def haveDrafts
       let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
         gAfter.getType
 
+      let currName := ((← getMCtx).getDecl gAfter).userName
+
       if goalA == goalB then
         let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x) ∘ LocalDecl.type)
-        out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore drafts, Format.pretty x⟩))
-        drafts := drafts.append (newHyps.toArray.map (·.type))
+        out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore drafts, currName.toString,  Format.pretty x⟩))
+        drafts := drafts.append (newHyps.toArray.map (fun x => ⟨x.userName, x.type⟩))
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           mkCurriedImplication newHyps goalA
-        out := out.push ⟨← Pp.ppGoal gBefore drafts, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x)) imp).pretty⟩
+        out := out.push ⟨← Pp.ppGoal gBefore drafts, currName.toString, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x)) imp).pretty⟩
 
-        drafts := drafts.push imp
+        drafts := drafts.push ⟨currName, imp⟩
 
     return out
 
@@ -425,8 +430,9 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
                 endPos := posAfter,
                 tactic := tacticText,
               },
-              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, y) => {
+              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
                 goal := x,
+                name := n,
                 haveDraft := y,
                 tactic := tacticText,
               })),
@@ -459,8 +465,9 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
               endPos := posAfter,
               tactic := tacticText
             },
-            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, y) => {
+            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
               goal := x,
+              name := n,
               haveDraft := y,
               tactic := tacticText,
             })),
