@@ -207,7 +207,7 @@ def haveDrafts
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           mkCurriedImplication newHyps goalA
-        out := out.push ⟨← Pp.ppGoal gBefore drafts, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ppExpr imp).pretty⟩
+        out := out.push ⟨← Pp.ppGoal gBefore drafts, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x)) imp).pretty⟩
 
         drafts := drafts.push imp
 
