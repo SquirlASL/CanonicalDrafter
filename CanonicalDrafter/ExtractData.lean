@@ -75,6 +75,43 @@ def applyOptions : Options → Options :=
   (pp.coercions.types.set · true |>
   (pp.unicode.fun.set · true))))
 
+open Lean Meta
+
+partial def replacePropsWithSorry (e : Expr) : MetaM Expr := do
+  let e ← instantiateMVars e
+  let ty ← inferType e
+  if (← isProp ty) then
+    return ← mkSorry ty true
+
+  match e with
+  | .app f a =>
+    return .app (← replacePropsWithSorry f) (← replacePropsWithSorry a)
+  | .lam n ty body bi =>
+    let newTy ← replacePropsWithSorry ty
+    withLocalDecl n bi newTy fun x => do
+      let newBody ← replacePropsWithSorry (body.instantiate1 x)
+      mkLambdaFVars #[x] newBody
+  | .forallE n ty body bi =>
+    let newTy ← replacePropsWithSorry ty
+    withLocalDecl n bi newTy fun x => do
+      let newBody ← replacePropsWithSorry (body.instantiate1 x)
+      mkForallFVars #[x] newBody
+  | .letE n ty val body _ =>
+    let newTy ← replacePropsWithSorry ty
+    let newVal ← replacePropsWithSorry val
+    withLetDecl n newTy newVal fun x => do
+      let newBody ← replacePropsWithSorry (body.instantiate1 x)
+      mkLetFVars #[x] newBody
+  | .mdata md e =>
+    return .mdata md (← replacePropsWithSorry e)
+  | .proj s i e =>
+    return .proj s i (← replacePropsWithSorry e)
+  | _ =>
+    return e
+
+def ppExpr (e : Expr) : MetaM Format := do
+  Meta.ppExpr (← replacePropsWithSorry e)
+
 -- Similar to `Meta.ppGoal` but uses String instead of Format to make sure local declarations are separated by "\n".
 private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #[]): MetaM String := do
   MonadWithOptions.withOptions applyOptions do
@@ -95,7 +132,7 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
             match type? with
             | none      => return s
             | some type =>
-              let typeFmt ← Meta.ppExpr type
+              let typeFmt ← Pp.ppExpr type
               return (s ++ (Format.joinSep ids.reverse (format " ") ++ " :" ++ Format.nest indent (Format.line ++ typeFmt)).group).pretty
         let rec ppVars (varNames : List Name) (prevType? : Option Expr) (s : String) (localDecl : LocalDecl) : MetaM (List Name × Option Expr × String) := do
           match localDecl with
@@ -112,10 +149,10 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
             let s ← pushPending varNames prevType? s
             let s  := addLine s
             let type ← instantiateMVars type
-            let typeFmt ← Meta.ppExpr type
+            let typeFmt ← Pp.ppExpr type
             let mut fmtElem  := format varName ++ " : " ++ typeFmt
             let val ← instantiateMVars val
-            let valFmt ← Meta.ppExpr val
+            let valFmt ← Pp.ppExpr val
             fmtElem := fmtElem ++ " :=" ++ Format.nest indent (Format.line ++ valFmt)
             let s := s ++ fmtElem.group.pretty
             return ([], none, s)
@@ -130,8 +167,8 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
         let mut s ← pushPending varNames type? s
         for addHyp in additionalHyps do
           let name := lctx.getUnusedName addHyp.1
-          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Meta.ppExpr addHyp.2).pretty
-        let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
+          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Pp.ppExpr addHyp.2).pretty
+        let goalTypeFmt ← Pp.ppExpr (← instantiateMVars mvarDecl.type)
         let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
         let s' := s ++ "\n" ++ goalFmt.pretty
         return s'
@@ -206,13 +243,13 @@ def haveDrafts
 
       if goalA == goalB then
         let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-          newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x) ∘ LocalDecl.type)
+          newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x) ∘ LocalDecl.type)
         out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore drafts, currName.toString,  Format.pretty x⟩))
         drafts := drafts.append (newHyps.toArray.map (fun x => ⟨x.userName, x.type⟩))
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           mkCurriedImplication newHyps goalA
-        out := out.push ⟨← Pp.ppGoal gBefore drafts, currName.toString, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do ppExpr x)) imp).pretty⟩
+        out := out.push ⟨← Pp.ppGoal gBefore drafts, currName.toString, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x)) imp).pretty⟩
 
         drafts := drafts.push ⟨currName, imp⟩
 
