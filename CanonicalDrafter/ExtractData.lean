@@ -187,8 +187,11 @@ end Pp
 open Lean Meta Elab Tactic
 
 def mkCurriedImplication (hyps : List LocalDecl) (goal : Expr) : MetaM Expr := do
-  hyps.foldrM (init := goal) fun hyp acc =>
-    return mkForall hyp.userName hyp.binderInfo hyp.type acc
+  -- Extract the `Expr.fvarId` for each hypothesis
+  let fvars ← hyps.mapM fun hyp => return mkFVar hyp.fvarId
+
+  -- Use mkForallFVars to abstract the goal over the fvars
+  mkForallFVars fvars.toArray goal
 
 def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
   let mctx ← getMCtx
@@ -218,6 +221,7 @@ def haveDrafts
       extractHypsFromGoal gBefore
 
     let beforeTypes := hypsBefore.map (·.type)
+    let beforefvars := hypsBefore.map (·.fvarId)
 
     let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
       gBefore.getType
@@ -234,7 +238,9 @@ def haveDrafts
       let newHyps ← hypsAfter.filterM fun h => do
         let isOld ← beforeTypes.anyM fun b => do
           return b == h.type
-        return !isOld
+        let isOld' ← beforefvars.anyM fun b => do
+          return b == h.fvarId
+        return !isOld ∨ !isOld'
 
       let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
         gAfter.getType
@@ -248,7 +254,7 @@ def haveDrafts
         drafts := drafts.append (newHyps.toArray.map (fun x => ⟨x.userName, x.type⟩))
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-          mkCurriedImplication newHyps goalA
+          mkCurriedImplication newHyps.reverse goalA
         out := out.push ⟨← Pp.ppGoal gBefore drafts, currName.toString, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x)) imp).pretty⟩
 
         drafts := drafts.push ⟨currName, imp⟩
