@@ -240,7 +240,12 @@ def haveDrafts
           return b == h.type
         let isOld' ← beforefvars.anyM fun b => do
           return b == h.fvarId
-        return !isOld ∨ !isOld'
+        return (!isOld ∨ !isOld')
+      let newHyps :=
+        if ← hypsAfter.anyM (fun h => do return ¬ (← isProp h.type)) then
+          []
+        else
+          newHyps
 
       let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
         gAfter.getType
