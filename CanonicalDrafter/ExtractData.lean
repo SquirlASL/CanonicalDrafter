@@ -62,7 +62,6 @@ deriving ToJson
 
 abbrev TraceM := StateT Trace MetaM
 
-
 namespace Pp
 
 
@@ -70,7 +69,7 @@ private def addLine (s : String) : String :=
   if s.isEmpty then s else s ++ "\n"
 
 def applyOptions : Options → Options :=
-  (pp.proofs.set · true |>
+  (pp.proofs.set · false |>
   (pp.motives.all.set · true |>
   (pp.coercions.types.set · true |>
   (pp.unicode.fun.set · true))))
@@ -132,7 +131,7 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
             match type? with
             | none      => return s
             | some type =>
-              let typeFmt ← Pp.ppExpr type
+              let typeFmt ← Meta.ppExpr type
               return (s ++ (Format.joinSep ids.reverse (format " ") ++ " :" ++ Format.nest indent (Format.line ++ typeFmt)).group).pretty
         let rec ppVars (varNames : List Name) (prevType? : Option Expr) (s : String) (localDecl : LocalDecl) : MetaM (List Name × Option Expr × String) := do
           match localDecl with
@@ -149,10 +148,10 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
             let s ← pushPending varNames prevType? s
             let s  := addLine s
             let type ← instantiateMVars type
-            let typeFmt ← Pp.ppExpr type
+            let typeFmt ← Meta.ppExpr type
             let mut fmtElem  := format varName ++ " : " ++ typeFmt
             let val ← instantiateMVars val
-            let valFmt ← Pp.ppExpr val
+            let valFmt ← Meta.ppExpr val
             fmtElem := fmtElem ++ " :=" ++ Format.nest indent (Format.line ++ valFmt)
             let s := s ++ fmtElem.group.pretty
             return ([], none, s)
@@ -167,8 +166,8 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
         let mut s ← pushPending varNames type? s
         for addHyp in additionalHyps do
           let name := lctx.getUnusedName addHyp.1
-          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Pp.ppExpr addHyp.2).pretty
-        let goalTypeFmt ← Pp.ppExpr (← instantiateMVars mvarDecl.type)
+          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Meta.ppExpr addHyp.2).pretty
+        let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
         let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
         let s' := s ++ "\n" ++ goalFmt.pretty
         return s'
