@@ -9,6 +9,36 @@ import Lake
 -- based on https://github.com/lean-dojo/LeanDojo/blob/main/src/lean_dojo/data_extraction/ExtractData.lean from LeanDojo
 -- unlike LeanDojo we only care about tracing tactics so we remove commands and premises to reduce storage cost and increase speed.
 
+open Lean
+
+def subscriptToNum (c : Char) : Char :=
+  match c with
+  | '₀' => '0'
+  | '₁' => '1'
+  | '₂' => '2'
+  | '₃' => '3'
+  | '₄' => '4'
+  | '₅' => '5'
+  | '₆' => '6'
+  | '₇' => '7'
+  | '₈' => '8'
+  | '₉' => '9'
+  | _   => c
+
+def increment (s : String) : String :=
+  let pre := s.dropRightWhile (fun c => isNumericSubscript c)
+  let num := s.takeRightWhile (fun c => isNumericSubscript c)
+  pre ++ ((num.map (subscriptToNum)).toNat?.getD 0 + 1).toSubscriptString
+
+partial def disambiguate (s : String) (scope : String → Bool) : String :=
+  if scope s then disambiguate (increment s) scope else s
+
+def desiredName (userName : Name) (tactic : String) : String :=
+  match userName.getRoot with
+  | .str _ s => s
+  | _ => ((tactic.splitOn).firstM (fun s : String =>
+    if !s.isEmpty && isIdFirst (s.get 0) && (s.toSubstring.drop 1).all isIdRest then some s else none
+  )).getD "this"
 
 open Lean Elab System
 
@@ -74,6 +104,12 @@ def applyOptions : Options → Options :=
   (pp.coercions.types.set · true |>
   (pp.unicode.fun.set · true))))
 
+def applyOptionsDraft : Options → Options :=
+  (pp.proofs.set · true |>
+  (pp.motives.all.set · true |>
+  (pp.coercions.types.set · true |>
+  (pp.unicode.fun.set · true))))
+
 open Lean Meta
 
 partial def replacePropsWithSorry (e : Expr) : MetaM Expr := do
@@ -109,10 +145,11 @@ partial def replacePropsWithSorry (e : Expr) : MetaM Expr := do
     return e
 
 def ppExpr (e : Expr) : MetaM Format := do
-  Meta.ppExpr (← replacePropsWithSorry e)
+  MonadWithOptions.withOptions applyOptionsDraft do
+    Meta.ppExpr (← replacePropsWithSorry e)
 
 -- Similar to `Meta.ppGoal` but uses String instead of Format to make sure local declarations are separated by "\n".
-private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #[]): MetaM String := do
+private def ppGoal (mvarId : MVarId) (additionalHyps : Array (String × Expr) := #[]) (beforeHyps : Array String := #[]) : MetaM String := do
   MonadWithOptions.withOptions applyOptions do
     match (← getMCtx).findDecl? mvarId with
     | none          => return "unknown goal"
@@ -165,8 +202,8 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (Name × Expr) := #
         let mut type? := type?
         let mut s ← pushPending varNames type? s
         for addHyp in additionalHyps do
-          let name := lctx.getUnusedName addHyp.1
-          s := s ++ "\n" ++ s!"{name.toString} : " ++ (← Meta.ppExpr addHyp.2).pretty
+          let name := disambiguate addHyp.1 (fun x => beforeHyps.contains x)
+          s := s ++ "\n" ++ s!"{name} : " ++ (← Meta.ppExpr addHyp.2).pretty
         let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
         let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
         let s' := s ++ "\n" ++ goalFmt.pretty
@@ -207,7 +244,7 @@ open Lean Meta in
 -/
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) : MetaM (Array (String × String × String)) := do
+  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array (String × String × String)) := do
 
   match goalsBefore with
   | [gBefore] =>
@@ -226,7 +263,7 @@ def haveDrafts
       gBefore.getType
 
     let mut out : Array (String × String × String) := #[]
-    let mut drafts : Array (Name × Expr) := #[]
+    let mut drafts : Array (String × Expr) := #[]
 
     for gAfter in goalsAfter do
       let some declAfter := mctx.findDecl? gAfter | throwError "unknown mvar {gAfter.name}"
@@ -254,14 +291,14 @@ def haveDrafts
       if goalA == goalB then
         let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x) ∘ LocalDecl.type)
-        out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore drafts, currName.toString,  Format.pretty x⟩))
-        drafts := drafts.append (newHyps.toArray.map (fun x => ⟨x.userName, x.type⟩))
+        out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore (drafts.map (fun x => ⟨x.1, x.2⟩)), desiredName currName tacticText,  Format.pretty x⟩))
+        drafts := drafts.append (newHyps.toArray.map (fun x => ⟨desiredName x.userName tacticText, x.type⟩))
       else
         let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           mkCurriedImplication newHyps.reverse goalA
-        out := out.push ⟨← Pp.ppGoal gBefore drafts, currName.toString, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x)) imp).pretty⟩
+        out := out.push ⟨← Pp.ppGoal gBefore drafts, desiredName currName tacticText, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x)) imp).pretty⟩
 
-        drafts := drafts.push ⟨currName, imp⟩
+        drafts := drafts.push ⟨desiredName currName tacticText, imp⟩
 
     return out
 
@@ -461,7 +498,7 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
         let haveDrafts' ← try
-          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter)
+          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
         catch _ =>
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
           pure #[]
@@ -495,13 +532,13 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let some posBefore := ti.stx.getPos? true | pure ()
         let some posAfter := ti.stx.getTailPos? true | pure ()
 
+        let tacticText := ctx.fileMap.source.extract posBefore posAfter
+
         let haveDrafts' ← try
-          ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter')
+          ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter' tacticText)
         catch _ =>
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
           pure #[]
-
-        let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
         modify fun trace => {
           trace with
