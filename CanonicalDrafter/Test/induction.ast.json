@@ -1,0 +1,120 @@
+{"tactics":
+ [{"tactic": "induction b",
+   "pos": 80,
+   "goalsBefore": ["a b : Nat\nh : a * b ≠ 0\n⊢ a ≤ a * b"],
+   "goalsAfter":
+   ["a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0",
+    "a n✝ : Nat\na✝ : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\n⊢ a ≤ a * (n✝ + 1)"],
+   "endPos": 91},
+  {"tactic":
+   "exact by\n    simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq] <;>\n      exact False.rec (fun t ↦ a = Nat.zero) (h (Eq.refl Nat.zero))",
+   "pos": 94,
+   "goalsBefore":
+   ["a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0",
+    "a n✝ : Nat\na✝ : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\n⊢ a ≤ a * (n✝ + 1)"],
+   "goalsAfter":
+   ["a n✝ : Nat\na✝ : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\n⊢ a ≤ a * (n✝ + 1)"],
+   "endPos": 244},
+  {"tactic":
+   "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq] <;>\n      exact False.rec (fun t ↦ a = Nat.zero) (h (Eq.refl Nat.zero))",
+   "pos": 107,
+   "goalsBefore": ["a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"],
+   "goalsAfter": [],
+   "endPos": 244},
+  {"tactic": "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq]",
+   "pos": 107,
+   "goalsBefore": ["a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"],
+   "goalsAfter": ["a : Nat\nh : a * 0 ≠ 0\n⊢ a = 0"],
+   "endPos": 170},
+  {"tactic": "exact False.rec (fun t ↦ a = Nat.zero) (h (Eq.refl Nat.zero))",
+   "pos": 181,
+   "goalsBefore": ["a : Nat\nh : a * 0 ≠ 0\n⊢ a = 0"],
+   "goalsAfter": [],
+   "endPos": 244},
+  {"tactic": "expose_names",
+   "pos": 247,
+   "goalsBefore":
+   ["a n✝ : Nat\na✝ : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\n⊢ a ≤ a * (n✝ + 1)"],
+   "goalsAfter":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * (n + 1)"],
+   "endPos": 259},
+  {"tactic": "change a ≤ a * n + a",
+   "pos": 262,
+   "goalsBefore":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * (n + 1)"],
+   "goalsAfter":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * n + a"],
+   "endPos": 284},
+  {"tactic":
+   "exact\n    Nat.rec (motive := fun t ↦ a.le (t.add a))\n      (by simp only [Nat.zero_add, Nat.add_eq] <;> exact Nat.le.refl)\n      (fun n n_ih ↦ by simp only [Nat.add_eq, Nat.succ_add] <;> exact Nat.le.step n_ih) (a.mul n)",
+   "pos": 287,
+   "goalsBefore":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * n + a"],
+   "goalsAfter": [],
+   "endPos": 511},
+  {"tactic": "simp only [Nat.zero_add, Nat.add_eq] <;> exact Nat.le.refl",
+   "pos": 352,
+   "goalsBefore":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ (fun t ↦ a.le (t.add a)) Nat.zero"],
+   "goalsAfter": [],
+   "endPos": 410},
+  {"tactic": "simp only [Nat.zero_add, Nat.add_eq]",
+   "pos": 352,
+   "goalsBefore":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ (fun t ↦ a.le (t.add a)) Nat.zero"],
+   "goalsAfter":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a.le a"],
+   "endPos": 388},
+  {"tactic": "exact Nat.le.refl",
+   "pos": 393,
+   "goalsBefore":
+   ["a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a.le a"],
+   "goalsAfter": [],
+   "endPos": 410},
+  {"tactic": "simp only [Nat.add_eq, Nat.succ_add] <;> exact Nat.le.step n_ih",
+   "pos": 437,
+   "goalsBefore":
+   ["a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ (fun t ↦ a.le (t.add a)) n.succ"],
+   "goalsAfter": [],
+   "endPos": 500},
+  {"tactic": "simp only [Nat.add_eq, Nat.succ_add]",
+   "pos": 437,
+   "goalsBefore":
+   ["a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ (fun t ↦ a.le (t.add a)) n.succ"],
+   "goalsAfter":
+   ["a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ a.le (n + a).succ"],
+   "endPos": 473},
+  {"tactic": "exact Nat.le.step n_ih",
+   "pos": 478,
+   "goalsBefore":
+   ["a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ a.le (n + a).succ"],
+   "goalsAfter": [],
+   "endPos": 500}],
+ "haveDrafts":
+ [{"tactic": "induction b",
+   "name": "zero",
+   "haveDraft": "a ≤ a * 0",
+   "goal": "a b : Nat\nh : a * b ≠ 0\n⊢ a ≤ a * b"},
+  {"tactic": "induction b",
+   "name": "succ",
+   "haveDraft": "a ≤ a * (n✝ + 1)",
+   "goal": "a b : Nat\nh : a * b ≠ 0\nzero : a ≤ a * 0\n⊢ a ≤ a * b"},
+  {"tactic": "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq]",
+   "name": "simp",
+   "haveDraft": "a = 0",
+   "goal": "a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"},
+  {"tactic": "change a ≤ a * n + a",
+   "name": "succ",
+   "haveDraft": "a ≤ a * n + a",
+   "goal":
+   "a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * (n + 1)"},
+  {"tactic": "simp only [Nat.zero_add, Nat.add_eq]",
+   "name": "simp",
+   "haveDraft": "a.le a",
+   "goal":
+   "a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ (fun t ↦ a.le (t.add a)) Nat.zero"},
+  {"tactic": "simp only [Nat.add_eq, Nat.succ_add]",
+   "name": "simp",
+   "haveDraft": "a.le (n + a).succ",
+   "goal":
+   "a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ (fun t ↦ a.le (t.add a)) n.succ"}]}

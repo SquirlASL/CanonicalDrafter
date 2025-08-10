@@ -1,0 +1,12 @@
+{"tactics":
+ [{"tactic": "rcases h with ⟨x, hx⟩",
+   "pos": 56,
+   "goalsBefore": ["h : ∃ x, 2 * x = 1\n⊢ False"],
+   "goalsAfter": ["x : Nat\nhx : 2 * x = 1\n⊢ False"],
+   "endPos": 81},
+  {"tactic": "sorry",
+   "pos": 84,
+   "goalsBefore": ["x : Nat\nhx : 2 * x = 1\n⊢ False"],
+   "goalsAfter": [],
+   "endPos": 89}],
+ "haveDrafts": []}
