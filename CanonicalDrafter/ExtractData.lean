@@ -498,7 +498,10 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
         let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
         let haveDrafts' ← try
-          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
+          if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
+            pure #[]
+          else
+            ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
         catch _ =>
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
           pure #[]
