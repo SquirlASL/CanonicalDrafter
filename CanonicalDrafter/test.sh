@@ -10,8 +10,15 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo "Building CanonicalDrafter..."
-lake build
+echo "Building Dependencies"
+lake exe cache get
+lake build Mathlib
+
+TOOLCHAIN_DIR=$(lean --print-prefix)
+TARGET_DIR=".lake/packages/lean4"
+
+mkdir -p "$TARGET_DIR"
+cp -r "$TOOLCHAIN_DIR"/* "$TARGET_DIR"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed!${NC}"
