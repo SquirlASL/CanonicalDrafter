@@ -31,14 +31,4 @@ jobs:
         run: ls -R .
 
       - name: Run tests
-        run: bash -x ./test.sh
-        
-      - name: Upload test artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: |
-            Test/*.produced.json
-            .lake/build/ir/Test/*.ast.json
-          retention-days: 7
+        run: lake exe test

@@ -17,3 +17,7 @@ lean_lib CanonicalDrafter where
   -- Your library code here if needed
 
 lean_lib Test where
+
+lean_exe test {
+  root := `Test
+}
