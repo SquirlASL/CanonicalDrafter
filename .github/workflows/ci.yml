@@ -1,4 +1,4 @@
-name: Run Tests
+name: Lean Action CI
 
 on:
   push:
@@ -6,30 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Build with Lean
-        uses: leanprover/lean-action@v1
-        with:
-          lake-package-directory: CanonicalDrafter
-          build: true
+      - name: Install elan
+        run: |
+          set -o pipefail
+          curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          ./elan-init -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
           
-      - name: Make test script executable
+      - name: Build project
         working-directory: ./CanonicalDrafter
-        run: chmod +x test.sh
+        run: lake build
         
       - name: Run tests
         working-directory: ./CanonicalDrafter
-        run: |
-          set -e  # Exit immediately if any command fails
-          ./test.sh
-          echo "Tests completed with exit code: $?"
-        
+        run: bash ./test.sh
+
       - name: Upload test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
