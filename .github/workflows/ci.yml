@@ -26,9 +26,6 @@ jobs:
           
       - name: Build project
         run: lake build
-      
-      - name: debug
-        run: ls -R .
 
       - name: Run tests
         run: lake exe test
