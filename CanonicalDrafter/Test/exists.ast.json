@@ -1,0 +1,16 @@
+{"tactics":
+ [{"tactic": "use 2",
+   "pos": 81,
+   "goalsBefore": ["b : ℕ\n⊢ ∃ x, x + b = b + x"],
+   "goalsAfter": ["b : ℕ\n⊢ 2 + b = b + 2"],
+   "endPos": 86},
+  {"tactic": "exact Nat.add_comm 2 b",
+   "pos": 89,
+   "goalsBefore": ["b : ℕ\n⊢ 2 + b = b + 2"],
+   "goalsAfter": [],
+   "endPos": 111}],
+ "haveDrafts":
+ [{"tactic": "use 2",
+   "name": "h",
+   "haveDraft": "2 + b = b + 2",
+   "goal": "b : ℕ\n⊢ ∃ x, x + b = b + x"}]}
