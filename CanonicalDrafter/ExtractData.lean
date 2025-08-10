@@ -201,8 +201,10 @@ private def ppGoal (mvarId : MVarId) (additionalHyps : Array (String × Expr) :=
         let mut varNames := varNames
         let mut type? := type?
         let mut s ← pushPending varNames type? s
-        for addHyp in additionalHyps do
-          let name := disambiguate addHyp.1 (fun x => beforeHyps.contains x)
+        let mut names : Array String := #[]
+        for addHyp in additionalHyps.toList do
+          let name := disambiguate addHyp.1 (fun x => beforeHyps.contains x ∨ names.contains x)
+          names := names.push name
           s := s ++ "\n" ++ s!"{name} : " ++ (← Meta.ppExpr addHyp.2).pretty
         let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
         let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
