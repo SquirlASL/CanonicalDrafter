@@ -19,15 +19,60 @@ jobs:
           curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
           ./elan-init -y --default-toolchain none
           echo "$HOME/.elan/bin" >> $GITHUB_PATH
+          # Also set for current session
+          export PATH="$HOME/.elan/bin:$PATH"
           
       - name: Build project
         working-directory: ./CanonicalDrafter
         run: lake build
         
+      - name: Debug environment differences
+        working-directory: ./CanonicalDrafter
+        run: |
+          echo "=== PATH and elan setup ==="
+          echo "PATH: $PATH"
+          echo "Checking if elan is available:"
+          which elan || echo "elan not found in PATH"
+          echo "Checking if lean is available:"
+          which lean || echo "lean not found in PATH"
+          echo "Checking if lake is available:"
+          which lake || echo "lake not found in PATH"
+          
+          echo "=== Environment Info ==="
+          if command -v lean &> /dev/null; then
+            echo "Lean version:"
+            lean --version
+          else
+            echo "lean command not found"
+          fi
+          
+          if command -v lake &> /dev/null; then
+            echo "Lake version:" 
+            lake --version
+          else
+            echo "lake command not found"
+          fi
+          
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          
+          echo "=== Lean toolchain info ==="
+          cat lean-toolchain || echo "No lean-toolchain file"
+          
+          echo "=== ExtractData.lean exists? ==="
+          if [[ -f "ExtractData.lean" ]]; then
+            echo "ExtractData.lean found"
+            head -5 ExtractData.lean
+          else
+            echo "ExtractData.lean not found!"
+          fi
+        
       - name: Run tests
         working-directory: ./CanonicalDrafter
         run: bash ./test.sh
-
+        
       - name: Upload test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
