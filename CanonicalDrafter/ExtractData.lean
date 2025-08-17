@@ -279,18 +279,14 @@ def haveDrafts
         let isOld' ← beforefvars.anyM fun b => do
           return b == h.fvarId
         return (!isOld ∨ !isOld')
-      let newHyps :=
-        if ← hypsAfter.anyM (fun h => do return ¬ (← isProp h.type)) then
-          []
-        else
-          newHyps
+      let newHyps ← newHyps.filterM (fun h => do return (← isProp h.type))
 
       let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
         gAfter.getType
 
       let currName := ((← getMCtx).getDecl gAfter).userName
 
-      if goalA == goalB then
+      if ← isDefEqGuarded goalA goalB then
         let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
           newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x) ∘ LocalDecl.type)
         out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore (drafts.map (fun x => ⟨x.1, x.2⟩)), desiredName currName tacticText,  Format.pretty x⟩))

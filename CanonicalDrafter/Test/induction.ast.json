@@ -93,21 +93,18 @@
  "haveDrafts":
  [{"tactic": "induction b",
    "name": "zero",
-   "haveDraft": "a ≤ a * 0",
+   "haveDraft": "a * 0 ≠ 0 → a ≤ a * 0",
    "goal": "a b : Nat\nh : a * b ≠ 0\n⊢ a ≤ a * b"},
   {"tactic": "induction b",
    "name": "succ",
-   "haveDraft": "a ≤ a * (n✝ + 1)",
-   "goal": "a b : Nat\nh : a * b ≠ 0\nzero : a ≤ a * 0\n⊢ a ≤ a * b"},
+   "haveDraft":
+   "(a * n✝ ≠ 0 → a ≤ a * n✝) → a * (n✝ + 1) ≠ 0 → a ≤ a * (n✝ + 1)",
+   "goal":
+   "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → a ≤ a * 0\n⊢ a ≤ a * b"},
   {"tactic": "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq]",
    "name": "simp",
    "haveDraft": "a = 0",
    "goal": "a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"},
-  {"tactic": "change a ≤ a * n + a",
-   "name": "succ",
-   "haveDraft": "a ≤ a * n + a",
-   "goal":
-   "a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ a ≤ a * (n + 1)"},
   {"tactic": "simp only [Nat.zero_add, Nat.add_eq]",
    "name": "simp",
    "haveDraft": "a.le a",

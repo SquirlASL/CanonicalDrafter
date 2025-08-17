@@ -1,5 +1,5 @@
 import Mathlib
 
-theorem womp : (⟨1, by decide⟩ : Fin 3) = 0 + 1 := by
+theorem womp (a : Fin 3): (⟨1, by decide⟩ : Fin 3) = 0 + a := by
   rw [add_comm]
   sorry

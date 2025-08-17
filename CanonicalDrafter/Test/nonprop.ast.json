@@ -9,4 +9,8 @@
    "goalsBefore": ["x : Nat\nhx : 2 * x = 1\n⊢ False"],
    "goalsAfter": [],
    "endPos": 89}],
- "haveDrafts": []}
+ "haveDrafts":
+ [{"tactic": "rcases h with ⟨x, hx⟩",
+   "name": "intro",
+   "haveDraft": "2 * x = 1",
+   "goal": "h : ∃ x, 2 * x = 1\n⊢ False"}]}
