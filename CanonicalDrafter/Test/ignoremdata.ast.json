@@ -1,39 +1,45 @@
 {"tactics":
  [{"tactic": "borelize 𝕜",
-   "pos": 443,
+   "pos": 610,
    "goalsBefore":
    ["𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"],
    "goalsAfter":
    ["𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\nthis✝¹ : MeasurableSpace 𝕜 := borel 𝕜\nthis✝ : BorelSpace 𝕜\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"],
-   "endPos": 456},
+   "endPos": 623},
   {"tactic": "sorry",
-   "pos": 459,
+   "pos": 626,
    "goalsBefore":
    ["𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\nthis✝¹ : MeasurableSpace 𝕜 := borel 𝕜\nthis✝ : BorelSpace 𝕜\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"],
    "goalsAfter": [],
-   "endPos": 464},
+   "endPos": 631},
   {"tactic": "have h1 : Function.Injective (comap f) := by sorry",
-   "pos": 830,
+   "pos": 997,
    "goalsBefore":
    ["R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"],
    "goalsAfter":
    ["R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\nh1 : Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"],
-   "endPos": 880},
+   "endPos": 1047},
   {"tactic": "sorry",
-   "pos": 875,
+   "pos": 1042,
    "goalsBefore":
    ["R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\n⊢ Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"],
    "goalsAfter": [],
-   "endPos": 880},
+   "endPos": 1047},
   {"tactic": "sorry",
-   "pos": 1102,
+   "pos": 1048,
    "goalsBefore":
    ["R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\nh1 : Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"],
    "goalsAfter": [],
-   "endPos": 1107}],
+   "endPos": 1053}],
  "haveDrafts":
  [{"tactic": "borelize 𝕜",
    "name": "borelize",
-   "haveDraft": "MeasurableSpace 𝕜",
+   "haveDraft": "BorelSpace 𝕜",
    "goal":
-   "𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"}]}
+   "𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"},
+  {"tactic": "have h1 : Function.Injective (comap f) := by sorry",
+   "name": "have",
+   "haveDraft":
+   "Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)",
+   "goal":
+   "R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"}]}
