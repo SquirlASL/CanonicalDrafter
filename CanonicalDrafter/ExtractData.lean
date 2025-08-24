@@ -85,7 +85,6 @@ structure HaveDraft where
 The trace of a Lean file.
 -/
 structure Trace where
-  tactics: Array TacticTrace    -- All tactics in the file.
   haveDrafts : Array HaveDraft   -- All have drafts in the file
 deriving ToJson
 
@@ -103,114 +102,7 @@ def applyOptions : Options → Options :=
   (pp.motives.all.set · true |>
   (pp.coercions.types.set · true |>
   (pp.unicode.fun.set · true))))
-
-def applyOptionsDraft : Options → Options :=
-  (pp.proofs.set · true |>
-  (pp.motives.all.set · true |>
-  (pp.coercions.types.set · true |>
-  (pp.unicode.fun.set · true))))
-
 open Lean Meta
-
-partial def replacePropsWithSorry (e : Expr) : MetaM Expr := do
-  let e ← instantiateMVars e
-  let ty ← inferType e
-  if (← isProp ty) then
-    return ← mkSorry ty true
-
-  match e with
-  | .app f a =>
-    return .app (← replacePropsWithSorry f) (← replacePropsWithSorry a)
-  | .lam n ty body bi =>
-    let newTy ← replacePropsWithSorry ty
-    withLocalDecl n bi newTy fun x => do
-      let newBody ← replacePropsWithSorry (body.instantiate1 x)
-      mkLambdaFVars #[x] newBody
-  | .forallE n ty body bi =>
-    let newTy ← replacePropsWithSorry ty
-    withLocalDecl n bi newTy fun x => do
-      let newBody ← replacePropsWithSorry (body.instantiate1 x)
-      mkForallFVars #[x] newBody
-  | .letE n ty val body _ =>
-    let newTy ← replacePropsWithSorry ty
-    let newVal ← replacePropsWithSorry val
-    withLetDecl n newTy newVal fun x => do
-      let newBody ← replacePropsWithSorry (body.instantiate1 x)
-      mkLetFVars #[x] newBody
-  | .mdata md e =>
-    return .mdata md (← replacePropsWithSorry e)
-  | .proj s i e =>
-    return .proj s i (← replacePropsWithSorry e)
-  | _ =>
-    return e
-
-def ppExpr (e : Expr) : MetaM Format := do
-  MonadWithOptions.withOptions applyOptionsDraft do
-    Meta.ppExpr (← replacePropsWithSorry e)
-
--- Similar to `Meta.ppGoal` but uses String instead of Format to make sure local declarations are separated by "\n".
-private def ppGoal (mvarId : MVarId) (additionalHyps : Array (String × Expr) := #[]) (beforeHyps : Array String := #[]) : MetaM String := do
-  MonadWithOptions.withOptions applyOptions do
-    match (← getMCtx).findDecl? mvarId with
-    | none          => return "unknown goal"
-    | some mvarDecl =>
-      let indent         := 2
-      let lctx           := mvarDecl.lctx
-      let lctx           := lctx.sanitizeNames.run' { options := (← getOptions) }
-      Meta.withLCtx lctx mvarDecl.localInstances do
-        -- The followint two `let rec`s are being used to control the generated code size.
-        -- Then should be remove after we rewrite the compiler in Lean
-        let rec pushPending (ids : List Name) (type? : Option Expr) (s : String) : MetaM String := do
-          if ids.isEmpty then
-            return s
-          else
-            let s := addLine s
-            match type? with
-            | none      => return s
-            | some type =>
-              let typeFmt ← Meta.ppExpr type
-              return (s ++ (Format.joinSep ids.reverse (format " ") ++ " :" ++ Format.nest indent (Format.line ++ typeFmt)).group).pretty
-        let rec ppVars (varNames : List Name) (prevType? : Option Expr) (s : String) (localDecl : LocalDecl) : MetaM (List Name × Option Expr × String) := do
-          match localDecl with
-          | .cdecl _ _ varName type _ _ =>
-            let varName := varName.simpMacroScopes
-            let type ← instantiateMVars type
-            if prevType? == none || prevType? == some type then
-              return (varName :: varNames, some type, s)
-            else do
-              let s ← pushPending varNames prevType? s
-              return ([varName], some type, s)
-          | .ldecl _ _ varName type val _ _ => do
-            let varName := varName.simpMacroScopes
-            let s ← pushPending varNames prevType? s
-            let s  := addLine s
-            let type ← instantiateMVars type
-            let typeFmt ← Meta.ppExpr type
-            let mut fmtElem  := format varName ++ " : " ++ typeFmt
-            let val ← instantiateMVars val
-            let valFmt ← Meta.ppExpr val
-            fmtElem := fmtElem ++ " :=" ++ Format.nest indent (Format.line ++ valFmt)
-            let s := s ++ fmtElem.group.pretty
-            return ([], none, s)
-        let (varNames, type?, s) ← lctx.foldlM (init := ([], none, "")) fun (varNames, prevType?, s) (localDecl : LocalDecl) =>
-          if localDecl.isAuxDecl || localDecl.isImplementationDetail then
-            -- Ignore auxiliary declarations and implementation details.
-            return (varNames, prevType?, s)
-          else
-            ppVars varNames prevType? s localDecl
-        let mut varNames := varNames
-        let mut type? := type?
-        let mut s ← pushPending varNames type? s
-        let mut names : Array String := #[]
-        for addHyp in additionalHyps.toList do
-          let name := disambiguate addHyp.1 (fun x => beforeHyps.contains x ∨ names.contains x)
-          names := names.push name
-          s := s ++ "\n" ++ s!"{name} : " ++ (← Meta.ppExpr addHyp.2).pretty
-        let goalTypeFmt ← Meta.ppExpr (← instantiateMVars mvarDecl.type)
-        let goalFmt := Meta.getGoalPrefix mvarDecl ++ Format.nest indent goalTypeFmt
-        let s' := s ++ "\n" ++ goalFmt.pretty
-        return s'
-
 
 def ppGoals (ctx : ContextInfo) (goals : List MVarId) : IO String :=
   if goals.isEmpty then
@@ -232,74 +124,61 @@ def mkCurriedImplication (hyps : List LocalDecl) (goal : Expr) : MetaM Expr := d
   mkForallFVars fvars.toArray goal
 
 def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
-  let mctx ← getMCtx
-  let some mdecl := mctx.findDecl? mvarId | return []
-  let lctx := mdecl.lctx
-  Meta.withLCtx lctx mdecl.localInstances do
-    pure <| lctx.foldl (init := []) fun acc decl =>
+  mvarId.withContext do
+    pure <| (← getLCtx).foldl (init := []) fun acc decl =>
       if decl.isAuxDecl || decl.isImplementationDetail then acc else decl :: acc
 
 open Lean Meta in
+
+def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (List LocalDecl) := do
+  let beforeTypes := (← extractHypsFromGoal goalBefore).map (·.type) -- TODO ordering
+  let beforeFVars := (← extractHypsFromGoal goalBefore).map (·.fvarId)
+  (← extractHypsFromGoal goalAfter).filterM fun h => do
+    return !(beforeFVars.contains (h.fvarId) || (← beforeTypes.anyM fun b => isDefEqGuarded b h.type))
 
 /-
  returns tuple and Array of (goal, name, type)
 -/
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array (String × String × String)) := do
-
+  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array (String × String × String)) :=
+  MonadWithOptions.withOptions Pp.applyOptions do
   match goalsBefore with
-  | [gBefore] =>
-    -- get metavariable decl for before
-    let mctx ← getMCtx
-    let some declBefore := mctx.findDecl? gBefore | throwError "unknown mvar {gBefore.name}"
-
-    -- run inside lctx of before
-    let hypsBefore ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
-      extractHypsFromGoal gBefore
-
-    let beforeTypes := hypsBefore.map (·.type)
-    let beforefvars := hypsBefore.map (·.fvarId)
-
-    let goalB ← Meta.withLCtx declBefore.lctx declBefore.localInstances do
-      gBefore.getType
+  | [gBefore] => do
+    if let [gAfter'] := goalsAfter then
+      if ← isDefEqGuarded (← gAfter'.getType) (← gBefore.getType) then -- isDefEq used instead of == for mdata
+        let newHyps ← newHyps gBefore gAfter'
+          if ← newHyps.allM (fun h => isProp h.type) then
+            let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
+            let mut result : Array (String × String × String) := #[]
+            let mut fvars := #[]
+            for (h, idx) in newHyps.zipIdx do
+              let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
+              let name := desiredName h.userName tacticText
+              let typeString ← gAfter'.withContext do pure ((← ppExpr h.type).pretty.replace "⋯" "sorry")
+              let subseq := ((newHyps.take idx).map (.fvar ·.fvarId)).toArray
+              let replaced := h.type.replaceFVars subseq fvars
+              let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
+              fvars := fvars.push (.fvar noted.1)
+              goal := noted.2
+              result := result.push (goalString, name, typeString)
+            return result
 
     let mut out : Array (String × String × String) := #[]
-    let mut drafts : Array (String × Expr) := #[]
+    let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
+
+    IO.println s!"{← gBefore.withContext do ppExpr (← gBefore.getType)} num goals after: {goalsAfter.length}"
 
     for gAfter in goalsAfter do
-      let some declAfter := mctx.findDecl? gAfter | throwError "unknown mvar {gAfter.name}"
-
-      let hypsAfter ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-        extractHypsFromGoal gAfter
-
-      let newHyps ← hypsAfter.filterM fun h => do
-        let isOld ← beforeTypes.anyM fun b => do
-          return b == h.type
-        let isOld' ← beforefvars.anyM fun b => do
-          return b == h.fvarId
-        return (!isOld ∨ !isOld')
-      let newHyps ← newHyps.filterM (fun h => do return (← isProp h.type))
-
-      let goalA ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-        gAfter.getType
-
-      let currName := ((← getMCtx).getDecl gAfter).userName
-
-      if ← isDefEqGuarded goalA goalB then
-        let newHypsStrs ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-          newHyps.mapM ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x) ∘ LocalDecl.type)
-        out := out.append (← newHypsStrs.toArray.mapM (fun x => do return ⟨← Pp.ppGoal gBefore (drafts.map (fun x => ⟨x.1, x.2⟩)), desiredName currName tacticText,  Format.pretty x⟩))
-        drafts := drafts.append (newHyps.toArray.map (fun x => ⟨desiredName x.userName tacticText, x.type⟩))
-      else
-        let imp ← Meta.withLCtx declAfter.lctx declAfter.localInstances do
-          mkCurriedImplication newHyps.reverse goalA
-        out := out.push ⟨← Pp.ppGoal gBefore drafts, desiredName currName tacticText, ← Meta.withLCtx declAfter.lctx declAfter.localInstances do return (← ((fun x => MonadWithOptions.withOptions Pp.applyOptions do Pp.ppExpr x)) imp).pretty⟩
-
-        drafts := drafts.push ⟨desiredName currName tacticText, imp⟩
-
+      let newHyps ← newHyps gBefore gAfter
+      let gAfterName := ((← getMCtx).getDecl gAfter).userName
+      let imp ← gAfter.withContext do mkCurriedImplication newHyps.reverse (← gAfter.getType)
+      let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
+      let name := desiredName gAfterName tacticText
+      let typeString := ← gAfter.withContext do return ((← ppExpr imp).pretty.replace "⋯" "sorry")
+      out := out.push (goalString, name, typeString)
+      goal := (← goal.note name.toName (← Meta.mkSorry imp false) imp).2
     return out
-
   | _ => return #[]
 
 namespace Path
@@ -484,37 +363,37 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
     | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
       let ctxBefore := { ctx with mctx := ti.mctxBefore }
       let ctxAfter := { ctx with mctx := ti.mctxAfter }
-      let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Pp.ppGoal)
-      let goalsAfter ← ctxAfter.runMetaM {} (ti.goalsAfter.toArray.mapM Pp.ppGoal)
-      if goalsBefore == #[] || goalsBefore == goalsAfter then
-        pure ()
-      else
-        let some posBefore := ti.stx.getPos? true | pure ()
-        let some posAfter := ti.stx.getTailPos? true | pure ()
+      let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
+      let goalsAfter ← ctxAfter.runMetaM {} (ti.goalsAfter.toArray.mapM Meta.ppGoal)
+      -- if goalsBefore.map (·.pretty) == #[] || goalsBefore.map (·.pretty) == goalsAfter.map (·.pretty) then
+      --   pure ()
+      -- else
+      let some posBefore := ti.stx.getPos? true | pure ()
+      let some posAfter := ti.stx.getTailPos? true | pure ()
 
-        -- Extract the actual tactic text from the source
-        let tacticText := ctx.fileMap.source.extract posBefore posAfter
+      -- Extract the actual tactic text from the source
+      let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
-        let haveDrafts' ← try
-          if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
-            pure #[]
-          else
-            ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
-        catch _ =>
-          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
+      let haveDrafts' ← try
+        if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
+          pure #[]
+        else
+          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
+        catch e =>
+          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
           pure #[]
 
         match ti.stx with
         | .node _ _ _ =>
           modify fun trace => {
             trace with
-              tactics := trace.tactics.push {
-                goalsBefore := goalsBefore,
-                goalsAfter := goalsAfter,
-                pos := posBefore,
-                endPos := posAfter,
-                tactic := tacticText,
-              },
+              -- tactics := trace.tactics.push {
+              --   goalsBefore := goalsBefore,
+              --   goalsAfter := goalsAfter,
+              --   pos := posBefore,
+              --   endPos := posAfter,
+              --   tactic := tacticText,
+              -- },
               haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
                 goal := x,
                 name := n,
@@ -523,13 +402,14 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
               })),
           }
         | _ => pure ()
+
     | ``Lean.Parser.Tactic.induction =>
       match i.stx.getRange? with
       | some r =>
         let goalsAfter' ← getSubNodePositions parent r.start r.stop ctx
-        let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Pp.ppGoal)
+        let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Meta.ppGoal)
         let ctxBefore := { ctx with mctx := ti.mctxBefore }
-        let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Pp.ppGoal)
+        let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
         let some posBefore := ti.stx.getPos? true | pure ()
         let some posAfter := ti.stx.getTailPos? true | pure ()
 
@@ -537,19 +417,12 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
 
         let haveDrafts' ← try
           ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter' tacticText)
-        catch _ =>
-          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter}\n\n")
+        catch e =>
+          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
           pure #[]
 
         modify fun trace => {
           trace with
-            tactics := trace.tactics.push {
-              goalsBefore := goalsBefore,
-              goalsAfter := goalsAfter.toArray,
-              pos := posBefore,
-              endPos := posAfter,
-              tactic := tacticText
-            },
             haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
               goal := x,
               name := n,
@@ -660,7 +533,7 @@ unsafe def processFile (path : FilePath) : IO Unit := do
   let env' := s.commandState.env
   let trees := s.commandState.infoState.trees.toArray
 
-  let traceM := (traverseForest trees env').run' ⟨#[], #[]⟩
+  let traceM := (traverseForest trees env').run' ⟨#[]⟩
   let (trace, _) ← traceM.run'.toIO {fileName := s!"{path}", fileMap := FileMap.ofString input} {env := env}
 
   let cwd ← IO.currentDir
