@@ -1,47 +1,4 @@
-{"tactics":
- [{"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
-   "pos": 86,
-   "goalsBefore":
-   ["a b : Nat\nh : a * b ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"],
-   "goalsAfter": [],
-   "endPos": 141},
-  {"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
-   "pos": 86,
-   "goalsBefore":
-   ["a b : Nat\nh : a * b ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"],
-   "goalsAfter":
-   ["a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
-    "a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"],
-   "endPos": 141},
-  {"tactic": "| zero =>",
-   "pos": 105,
-   "goalsBefore":
-   ["a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)"],
-   "goalsAfter":
-   ["a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
-    "a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"],
-   "endPos": 114},
-  {"tactic": "sorry",
-   "pos": 115,
-   "goalsBefore":
-   ["a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)"],
-   "goalsAfter": [],
-   "endPos": 120},
-  {"tactic": "| succ n' =>",
-   "pos": 123,
-   "goalsBefore":
-   ["a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"],
-   "goalsAfter":
-   ["a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
-    "a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"],
-   "endPos": 135},
-  {"tactic": "sorry",
-   "pos": 136,
-   "goalsBefore":
-   ["a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"],
-   "goalsAfter": [],
-   "endPos": 141}],
- "haveDrafts":
+{"haveDrafts":
  [{"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
    "name": "zero",
    "haveDraft": "a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
@@ -49,16 +6,6 @@
   {"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
    "name": "succ",
    "haveDraft":
-   "(a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)) → a * (n' + 1) ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)",
+   "∀ (n' : Nat),\n  (a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)) → a * (n' + 1) ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)",
    "goal":
-   "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"},
-  {"tactic": "| zero =>",
-   "name": "succ",
-   "haveDraft":
-   "(a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)) → a * (n' + 1) ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)",
-   "goal": "a : Nat\nh : a * 0 ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)"},
-  {"tactic": "| succ n' =>",
-   "name": "zero",
-   "haveDraft": "a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
-   "goal":
-   "a n' : Nat\na✝ : a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)\nh : a * (n' + 1) ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)"}]}
+   "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"}]}

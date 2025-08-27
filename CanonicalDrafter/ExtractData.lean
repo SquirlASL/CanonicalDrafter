@@ -30,8 +30,8 @@ def increment (s : String) : String :=
   let num := s.takeRightWhile (fun c => isNumericSubscript c)
   pre ++ ((num.map (subscriptToNum)).toNat?.getD 0 + 1).toSubscriptString
 
-partial def disambiguate (s : String) (scope : String → Bool) : String :=
-  if scope s then disambiguate (increment s) scope else s
+partial def disambiguate (s : String) : MetaM String := do
+  if ((← getLCtx).findFromUserName? s.toName).isSome then disambiguate (increment s) else return s
 
 def desiredName (userName : Name) (tactic : String) : String :=
   match userName.getRoot with
@@ -116,25 +116,24 @@ end Pp
 
 open Lean Meta Elab Tactic
 
-def mkCurriedImplication (hyps : List LocalDecl) (goal : Expr) : MetaM Expr := do
+def mkCurriedImplication (hyps : Array LocalDecl) (goal : Expr) : MetaM Expr := do
   -- Extract the `Expr.fvarId` for each hypothesis
   let fvars ← hyps.mapM fun hyp => return mkFVar hyp.fvarId
 
   -- Use mkForallFVars to abstract the goal over the fvars
-  mkForallFVars fvars.toArray goal
+  mkForallFVars fvars goal
 
-def extractHypsFromGoal (mvarId : MVarId) : MetaM (List LocalDecl) := do
+def extractHypsFromGoal (mvarId : MVarId) : MetaM (Array LocalDecl) := do
   mvarId.withContext do
-    pure <| (← getLCtx).foldl (init := []) fun acc decl =>
-      if decl.isAuxDecl || decl.isImplementationDetail then acc else decl :: acc
+    pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
+      if decl.isAuxDecl || decl.isImplementationDetail then acc else acc.push decl
 
 open Lean Meta in
 
-def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (List LocalDecl) := do
-  let beforeTypes := (← extractHypsFromGoal goalBefore).map (·.type) -- TODO ordering
+def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (Array LocalDecl) := do
+  -- let beforeTypes := (← extractHypsFromGoal goalBefore).map (·.type) -- TODO ordering
   let beforeFVars := (← extractHypsFromGoal goalBefore).map (·.fvarId)
-  (← extractHypsFromGoal goalAfter).filterM fun h => do
-    return !(beforeFVars.contains (h.fvarId) || (← beforeTypes.anyM fun b => isDefEqGuarded b h.type))
+  (← extractHypsFromGoal goalAfter).filterM fun h => do return !(beforeFVars.contains (h.fvarId))
 
 /-
  returns tuple and Array of (goal, name, type)
@@ -142,27 +141,32 @@ def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (List LocalDecl) 
 def haveDrafts
   (goalsBefore : List MVarId)
   (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array (String × String × String)) :=
+  let intersection := goalsBefore.filter (fun g => goalsAfter.contains g)
+  let goalsBefore := goalsBefore.filter (fun g => !intersection.contains g)
+  let goalsAfter := goalsAfter.filter (fun g => !intersection.contains g)
   MonadWithOptions.withOptions Pp.applyOptions do
   match goalsBefore with
   | [gBefore] => do
     if let [gAfter'] := goalsAfter then
       if ← isDefEqGuarded (← gAfter'.getType) (← gBefore.getType) then -- isDefEq used instead of == for mdata
         let newHyps ← newHyps gBefore gAfter'
-          if ← newHyps.allM (fun h => isProp h.type) then
-            let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
-            let mut result : Array (String × String × String) := #[]
-            let mut fvars := #[]
-            for (h, idx) in newHyps.zipIdx do
-              let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
-              let name := desiredName h.userName tacticText
-              let typeString ← gAfter'.withContext do pure ((← ppExpr h.type).pretty.replace "⋯" "sorry")
-              let subseq := ((newHyps.take idx).map (.fvar ·.fvarId)).toArray
-              let replaced := h.type.replaceFVars subseq fvars
-              let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
-              fvars := fvars.push (.fvar noted.1)
-              goal := noted.2
-              result := result.push (goalString, name, typeString)
-            return result
+        let fvarNewHyps := newHyps.filter (fun h => !h.isLet)
+        let letNewHyps := newHyps.filter (fun h => h.isLet)
+        if ← fvarNewHyps.allM (fun h => isProp h.type) then
+          let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
+          let mut result : Array (String × String × String) := #[]
+          let mut fvars := #[]
+          for (h, idx) in fvarNewHyps.zipIdx do
+            let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
+            let name := ← goal.withContext do disambiguate (desiredName h.userName tacticText)
+            let typeString ← gAfter'.withContext do pure ((← ppExpr h.type).pretty.replace "⋯" "sorry")
+            let subseq := ((fvarNewHyps.take idx).map (.fvar ·.fvarId))
+            let replaced ← gAfter'.withContext do mkCurriedImplication letNewHyps (h.type.replaceFVars subseq fvars)
+            let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
+            fvars := fvars.push (.fvar noted.1)
+            goal := noted.2
+            result := result.push (goalString, name, typeString)
+          return result
 
     let mut out : Array (String × String × String) := #[]
     let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
@@ -172,9 +176,9 @@ def haveDrafts
     for gAfter in goalsAfter do
       let newHyps ← newHyps gBefore gAfter
       let gAfterName := ((← getMCtx).getDecl gAfter).userName
-      let imp ← gAfter.withContext do mkCurriedImplication newHyps.reverse (← gAfter.getType)
+      let imp ← gAfter.withContext do mkCurriedImplication newHyps (← gAfter.getType)
       let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
-      let name := desiredName gAfterName tacticText
+      let name := ← goal.withContext do disambiguate (desiredName gAfterName tacticText)
       let typeString := ← gAfter.withContext do return ((← ppExpr imp).pretty.replace "⋯" "sorry")
       out := out.push (goalString, name, typeString)
       goal := (← goal.note name.toName (← Meta.mkSorry imp false) imp).2
@@ -374,6 +378,8 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
       -- Extract the actual tactic text from the source
       let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
+      IO.println s!"tactic text: {tacticText}"
+
       let haveDrafts' ← try
         if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
           pure #[]
@@ -383,31 +389,34 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
           pure #[]
 
-        match ti.stx with
-        | .node _ _ _ =>
-          modify fun trace => {
-            trace with
-              -- tactics := trace.tactics.push {
-              --   goalsBefore := goalsBefore,
-              --   goalsAfter := goalsAfter,
-              --   pos := posBefore,
-              --   endPos := posAfter,
-              --   tactic := tacticText,
-              -- },
-              haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
-                goal := x,
-                name := n,
-                haveDraft := y,
-                tactic := tacticText,
-              })),
-          }
-        | _ => pure ()
+      IO.println s!"goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
+
+      match ti.stx with
+      | .node _ _ _ =>
+        modify fun trace => {
+          trace with
+            -- tactics := trace.tactics.push {
+            --   goalsBefore := goalsBefore,
+            --   goalsAfter := goalsAfter,
+            --   pos := posBefore,
+            --   endPos := posAfter,
+            --   tactic := tacticText,
+            -- },
+            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
+              goal := x,
+              name := n,
+              haveDraft := y,
+              tactic := tacticText,
+            })),
+        }
+      | _ => pure ()
 
     | ``Lean.Parser.Tactic.induction =>
       match i.stx.getRange? with
       | some r =>
         let goalsAfter' ← getSubNodePositions parent r.start r.stop ctx
         let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Meta.ppGoal)
+        IO.println s!"pattern match goalsAfter: {goalsAfter}"
         let ctxBefore := { ctx with mctx := ti.mctxBefore }
         let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
         let some posBefore := ti.stx.getPos? true | pure ()
@@ -415,11 +424,15 @@ private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : Info
 
         let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
+        IO.println s!"tactic text: {tacticText}"
+
         let haveDrafts' ← try
           ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter' tacticText)
         catch e =>
           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
           pure #[]
+
+        IO.println s!"ind match goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
 
         modify fun trace => {
           trace with

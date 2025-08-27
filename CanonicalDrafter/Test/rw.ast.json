@@ -1,25 +1,9 @@
-{"tactics":
+{"haveDrafts":
  [{"tactic": "rw [Nat.mul_comm] at q",
-   "pos": 64,
-   "goalsBefore": ["h : 2 = 2\nq : 2 + 3 * 2 = 8\n⊢ 1 + 1 = 3"],
-   "goalsAfter": ["h : 2 = 2\nq : 2 + 2 * 3 = 8\n⊢ 1 + 1 = 3"],
-   "endPos": 86},
-  {"tactic": "Nat.mul_comm",
-   "pos": 68,
-   "goalsBefore": ["h : 2 = 2\nq : 2 + 3 * 2 = 8\n⊢ 1 + 1 = 3"],
-   "goalsAfter": ["h : 2 = 2\nq : 2 + 2 * 3 = 8\n⊢ 1 + 1 = 3"],
-   "endPos": 80},
-  {"tactic": "sorry",
-   "pos": 89,
-   "goalsBefore": ["h : 2 = 2\nq : 2 + 2 * 3 = 8\n⊢ 1 + 1 = 3"],
-   "goalsAfter": [],
-   "endPos": 94}],
- "haveDrafts":
- [{"tactic": "rw [Nat.mul_comm] at q",
-   "name": "rw",
+   "name": "q₁",
    "haveDraft": "2 + 2 * 3 = 8",
    "goal": "h : 2 = 2\nq : 2 + 3 * 2 = 8\n⊢ 1 + 1 = 3"},
   {"tactic": "Nat.mul_comm",
-   "name": "this",
+   "name": "q₁",
    "haveDraft": "2 + 2 * 3 = 8",
    "goal": "h : 2 = 2\nq : 2 + 3 * 2 = 8\n⊢ 1 + 1 = 3"}]}
