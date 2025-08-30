@@ -373,37 +373,37 @@ def extractLhsTypeRhs (letDeclNode : Syntax) : Option (Syntax × Option Syntax �
 --   | .node (Info.ofTacticInfo i) children =>
 --     match i.stx.getKind with
 --     | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
---       let ctxBefore := { ctx with mctx := ti.mctxBefore }
---       let ctxAfter := { ctx with mctx := ti.mctxAfter }
---       let letDeclNode : Option _ := match ti.stx with
---       |  Syntax.node _ `Lean.Parser.Tactic.tacticLet_ args => some args[1]!
---       |  Syntax.node _ `Lean.Parser.Tactic.tacticHave_ args => some args[1]!
---       | _ =>
---           none
---       if let some ⟨lhs, type, rhs⟩ := Option.bind letDeclNode extractLhsTypeRhs
---       then do
---         IO.println type
---         IO.println letDeclNode
---         -- Extract the name from lhs
---         let name? : Option Name :=
---           match lhs with
---           | Syntax.ident _ _ id _ => some id
---           | _ => none
+      -- let ctxBefore := { ctx with mctx := ti.mctxBefore }
+      -- let ctxAfter := { ctx with mctx := ti.mctxAfter }
+      -- let letDeclNode : Option _ := match ti.stx with
+      -- |  Syntax.node _ `Lean.Parser.Tactic.tacticLet_ args => some args[1]!
+      -- |  Syntax.node _ `Lean.Parser.Tactic.tacticHave_ args => some args[1]!
+      -- | _ =>
+      --     none
+      -- if let some ⟨lhs, type, rhs⟩ := Option.bind letDeclNode extractLhsTypeRhs
+      -- then do
+      --   IO.println type
+      --   IO.println letDeclNode
+      --   -- Extract the name from lhs
+      --   let name? : Option Name :=
+      --     match lhs with
+      --     | Syntax.ident _ _ id _ => some id
+      --     | _ => none
 
---         match name? with
---         | some n => IO.println s!"Name: {n}"
---         | none   => IO.println "Pattern/wildcard lhs, no single name"
+      --   match name? with
+      --   | some n => IO.println s!"Name: {n}"
+      --   | none   => IO.println "Pattern/wildcard lhs, no single name"
 
---         -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
---         -- let type ← match type with
---         --   | some type => do Term.elabTerm type none
---         --   | none => do Meta.inferType (← Term.elabTerm rhs none)
+      --   -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
+      --   -- let type ← match type with
+      --   --   | some type => do Term.elabTerm type none
+      --   --   | none => do Meta.inferType (← Term.elabTerm rhs none)
 
---         let expr : Expr ←
---           Term.elabTerm rhs none
---         if let some type := type then
---           let type : Expr ← Term.elabTerm type none
---           IO.println type
+      --   let expr : Expr ←
+      --     Term.elabTerm rhs none
+      --   if let some type := type then
+      --     let type : Expr ← Term.elabTerm type none
+      --     IO.println type
 --         let type ← ctxBefore.runMetaM {} (Meta.inferType expr)
 --         IO.println s!"Elaborated RHS expr: {← ppExpr expr}"
 --       let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
@@ -560,6 +560,7 @@ def getImports (header: TSyntax `Lean.Parser.Module.header) : IO String := do
 
   return s.trim
 
+#check Lean.Meta.MetaM.toIO (sorry : TermElabM Nat).run'
 /--
 Trace a *.lean file.
 -/
@@ -567,15 +568,51 @@ unsafe def processFile (path : FilePath) : IO Unit := do
   println! path
   let input ← IO.FS.readFile path
   -- Split the processing into two phases to prevent self-reference in proofs in tactic mode
-  let (_, _, _, trees) ← IO.processInput input none
+  let (_, cmdStAfter, _, trees) ← IO.processInput input none
 
   let tactics := (trees.flatMap (Lean.Elab.InfoTree.findTacticNodes)).toArray
 
-  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ =>
+  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ => do
     let (pb, pa) := stxRange ctx.fileMap ti.stx
     let pb := ctx.fileMap.ofPosition pb
     let pa := ctx.fileMap.ofPosition pa
-    ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter (ctx.fileMap.source.extract pb pa)))
+    IO.println ti.stx.formatStx
+    let tacticText := ctx.fileMap.source.extract pb pa
+    if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
+      pure #[]
+    else if let some ⟨lhs, type, rhs⟩ := match ti.stx with
+      | Syntax.node _ `Lean.Parser.Tactic.tacticLet_ args =>
+        extractLhsTypeRhs args[1]!
+      | Syntax.node _ `Lean.Parser.Tactic.tacticHave_ args =>
+        extractLhsTypeRhs args[1]!
+      | Syntax.node _ `Lean.Parser.Tactic.obtain args =>
+        some ⟨Syntax.missing, some (args[2]!.getArg 0 |>.getArg 1), (args[3]!.getArg 2).getArg 0⟩
+      | _ => none
+    then do
+      let (x, _, _) ← Lean.Meta.MetaM.toIO (Lean.Elab.Term.TermElabM.run' ((do
+        IO.println type
+        -- Extract the name from lhs
+        let name? : Option Name :=
+          match lhs with
+          | Syntax.ident _ _ id _ => some id
+          | _ => none
+
+        match name? with
+        | some n => IO.println s!"Name: {n}"
+        | none   => IO.println "Pattern/wildcard lhs, no single name"
+
+        -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
+        let type ← match type with
+          | some type => do Term.elabTerm type none
+          | none => do Meta.inferType (← Term.elabTerm rhs none)
+
+        let draft := (← Meta.ppExpr type).pretty
+        let goal := (← Meta.ppGoal ti.goalsBefore[0]!).pretty
+        return #[⟨tacticText, "asdas", goal, draft⟩]
+      ) : TermElabM (Array HaveDraft))) {fileName := s!"{path}", fileMap := FileMap.ofString input} {env := cmdStAfter.env}
+      return x
+    else
+      ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText))
 
   let trace := drafts.toJson
   let cwd ← IO.currentDir
