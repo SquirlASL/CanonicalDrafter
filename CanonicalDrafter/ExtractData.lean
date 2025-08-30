@@ -586,7 +586,18 @@ unsafe def processFile (path : FilePath) : IO Unit := do
       | Syntax.node _ `Lean.Parser.Tactic.tacticHave_ args =>
         extractLhsTypeRhs args[1]!
       | Syntax.node _ `Lean.Parser.Tactic.obtain args =>
-        some ⟨Syntax.missing, some (args[2]!.getArg 0 |>.getArg 1), (args[3]!.getArg 2).getArg 0⟩
+        -- (Tactic.obtain
+        --  "obtain"
+        --  [(Tactic.rcasesPatMed
+        --    [(Tactic.rcasesPat.tuple
+        --      "⟨"
+        --      [(Tactic.rcasesPatLo (Tactic.rcasesPatMed [(Tactic.rcasesPat.one `a)]) [])
+        --       ","
+        --       (Tactic.rcasesPatLo (Tactic.rcasesPatMed [(Tactic.rcasesPat.one `b)]) [])]
+        --      "⟩")])]
+        --  [":" («term_∧_» («term_=_» (num "2") "=" (num "2")) "∧" («term_=_» (num "3") "=" (num "3")))]
+        --  [":=" [(Term.anonymousCtor "⟨" [`rfl "," `rfl] "⟩")]])
+        some ⟨Syntax.missing, some (args[2]!.getArg 1), (args[3]!.getArg 2).getArg 0⟩
       | _ => none
     then do
       let (x, _, _) ← Lean.Meta.MetaM.toIO (Lean.Elab.Term.TermElabM.run' ((do
