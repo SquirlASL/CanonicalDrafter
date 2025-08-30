@@ -1,6 +1,7 @@
 import Lean
 import Lake
-
+import REPL.Lean.InfoTree
+import REPL.Frontend
 -- example test
 -- lake env lean --run ../CanonicalDrafter/ExtractData.lean Mathlib/Combinatorics/Hindman.lean
 -- cat .lake/build/ir/Mathlib/Combinatorics/Hindman.ast.json
@@ -56,10 +57,6 @@ deriving instance ToJson for Syntax.Preresolved
 deriving instance ToJson for Syntax
 deriving instance ToJson for Position
 
-
-namespace LeanDojo
-
-
 /--
 The trace of a tactic.
 -/
@@ -89,7 +86,7 @@ structure Trace where
 deriving ToJson
 
 
-abbrev TraceM := StateT Trace MetaM
+abbrev TraceM := StateT Trace TermElabM
 
 namespace Pp
 
@@ -140,7 +137,7 @@ def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (Array LocalDecl)
 -/
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array (String × String × String)) :=
+  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array HaveDraft) :=
   let intersection := goalsBefore.filter (fun g => goalsAfter.contains g)
   let goalsBefore := goalsBefore.filter (fun g => !intersection.contains g)
   let goalsAfter := goalsAfter.filter (fun g => !intersection.contains g)
@@ -154,7 +151,7 @@ def haveDrafts
         let letNewHyps := newHyps.filter (fun h => h.isLet)
         if ← fvarNewHyps.allM (fun h => isProp h.type) then
           let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
-          let mut result : Array (String × String × String) := #[]
+          let mut result : Array HaveDraft := #[]
           let mut fvars := #[]
           for (h, idx) in fvarNewHyps.zipIdx do
             let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
@@ -165,10 +162,10 @@ def haveDrafts
             let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
             fvars := fvars.push (.fvar noted.1)
             goal := noted.2
-            result := result.push (goalString, name, typeString)
+            result := result.push ⟨tacticText, name, goalString, typeString⟩
           return result
 
-    let mut out : Array (String × String × String) := #[]
+    let mut out : Array HaveDraft := #[]
     let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
 
     IO.println s!"{← gBefore.withContext do ppExpr (← gBefore.getType)} num goals after: {goalsAfter.length}"
@@ -180,7 +177,7 @@ def haveDrafts
       let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
       let name := ← goal.withContext do disambiguate (desiredName gAfterName tacticText)
       let typeString := ← gAfter.withContext do return ((← ppExpr imp).pretty.replace "⋯" "sorry")
-      out := out.push (goalString, name, typeString)
+      out := out.push ⟨tacticText, name, goalString, typeString⟩
       goal := (← goal.note name.toName (← Meta.mkSorry imp false) imp).2
     return out
   | _ => return #[]
@@ -320,170 +317,211 @@ end Path
 
 namespace Traversal
 
-partial def getSubNodePositions (infotree : InfoTree) (startPos : String.Pos) (endPos : String.Pos) (ctx? : Option ContextInfo) : IO (List MVarId) := do
-  match infotree with
-  | .context ctx t => getSubNodePositions t startPos endPos (ctx.mergeIntoOuter? ctx?)
-  | .node info children =>
-    match info.stx.getRange? with
-    | some r =>
-      match ctx? with
-      | some ctx =>
-        let flag ← ctx.runMetaM {} try
-          match info with
-          | .ofTacticInfo  info =>
-            return info.goalsBefore
-          | _                   => return []
-        catch _ =>
-          pure []
-        if (startPos < r.start ∨ r.stop < endPos) ∧ flag != [] then
-          return flag
-        else
-          return (← (children.mapM (getSubNodePositions · startPos endPos ctx?))).toList.foldr (· ++ ·) []
-      | none => pure []
-    | none => pure []
-  | .hole mvarId => pure []
+-- partial def getSubNodePositions (infotree : InfoTree) (startPos : String.Pos) (endPos : String.Pos) (ctx? : Option ContextInfo) : IO (List MVarId) := do
+--   match infotree with
+--   | .context ctx t => getSubNodePositions t startPos endPos (ctx.mergeIntoOuter? ctx?)
+--   | .node info children =>
+--     match info.stx.getRange? with
+--     | some r =>
+--       match ctx? with
+--       | some ctx =>
+--         let flag ← ctx.runMetaM {} try
+--           match info with
+--           | .ofTacticInfo  info =>
+--             return info.goalsBefore
+--           | _                   => return []
+--         catch _ =>
+--           pure []
+--         if (startPos < r.start ∨ r.stop < endPos) ∧ flag != [] then
+--           return flag
+--         else
+--           return (← (children.mapM (getSubNodePositions · startPos endPos ctx?))).toList.foldr (· ++ ·) []
+--       | none => pure []
+--     | none => pure []
+--   | .hole mvarId => pure []
 
-/--
-Extract tactic information from `TacticInfo` in `InfoTree`.
--/
-private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : InfoTree) : TraceM Unit := do
-  match ti.stx.getKind with
-  | ``Lean.Parser.Term.byTactic =>
-    match ti.stx with
-    | .node _ _ #[.atom _ "by", .node _ ``Lean.Parser.Tactic.tacticSeq _] => pure ()
-    | _ => assert! false
+def extractLhsTypeRhs (letDeclNode : Syntax) : Option (Syntax × Option Syntax × Syntax) := do
+  -- (Term.haveDecl (Term.haveIdDecl (Term.haveId `y) [] [(Term.typeSpec ":" («term_=_» (num "3") "=" (num "3")))] ":=" `rfl)))
+  let letIdDecl := letDeclNode.getArg 0  -- this is the letIdDecl
+  let lhs := letIdDecl.getArg 0          -- the identifier / pattern (`x` or `⟨a,b⟩`)
+  let rhs := letIdDecl.getArg (letIdDecl.getNumArgs - 1)
+  let type := match ((letIdDecl.getArg 2).getArg 0).getArg 1 with
+    | Syntax.missing => none
+    | x => some x
 
-  | ``Lean.Parser.Tactic.tacticSeq =>
-    match ti.stx with
-    | .node _ _ #[.node _ ``Lean.Parser.Tactic.tacticSeq1Indented _] => pure ()
-    | .node _ _ #[.node _ ``Lean.Parser.Tactic.tacticSeqBracketed _] => pure ()
-    | _ => assert! false
+  some (lhs, type, rhs)
 
-  | _ => pure ()
+-- /--
+-- Extract tactic information from `TacticInfo` in `InfoTree`.
+-- -/
+-- private def visitTacticInfo (ctx : ContextInfo) (ti : TacticInfo) (parent : InfoTree) : TraceM Unit := do
+--   match ti.stx.getKind with
+--   | ``Lean.Parser.Term.byTactic =>
+--     match ti.stx with
+--     | .node _ _ #[.atom _ "by", .node _ ``Lean.Parser.Tactic.tacticSeq _] => pure ()
+--     | _ => assert! false
 
-  match parent with
-  | .node (Info.ofTacticInfo i) children =>
-    match i.stx.getKind with
-    | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
-      let ctxBefore := { ctx with mctx := ti.mctxBefore }
-      let ctxAfter := { ctx with mctx := ti.mctxAfter }
-      let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
-      let goalsAfter ← ctxAfter.runMetaM {} (ti.goalsAfter.toArray.mapM Meta.ppGoal)
-      -- if goalsBefore.map (·.pretty) == #[] || goalsBefore.map (·.pretty) == goalsAfter.map (·.pretty) then
-      --   pure ()
-      -- else
-      let some posBefore := ti.stx.getPos? true | pure ()
-      let some posAfter := ti.stx.getTailPos? true | pure ()
+--   | ``Lean.Parser.Tactic.tacticSeq =>
+--     match ti.stx with
+--     | .node _ _ #[.node _ ``Lean.Parser.Tactic.tacticSeq1Indented _] => pure ()
+--     | .node _ _ #[.node _ ``Lean.Parser.Tactic.tacticSeqBracketed _] => pure ()
+--     | _ => assert! false
 
-      -- Extract the actual tactic text from the source
-      let tacticText := ctx.fileMap.source.extract posBefore posAfter
+--   | _ => pure ()
 
-      IO.println s!"tactic text: {tacticText}"
+--   match parent with
+--   | .node (Info.ofTacticInfo i) children =>
+--     match i.stx.getKind with
+--     | ``Lean.Parser.Tactic.tacticSeq1Indented | ``Lean.Parser.Tactic.tacticSeqBracketed | ``Lean.Parser.Tactic.rewriteSeq =>
+--       let ctxBefore := { ctx with mctx := ti.mctxBefore }
+--       let ctxAfter := { ctx with mctx := ti.mctxAfter }
+--       let letDeclNode : Option _ := match ti.stx with
+--       |  Syntax.node _ `Lean.Parser.Tactic.tacticLet_ args => some args[1]!
+--       |  Syntax.node _ `Lean.Parser.Tactic.tacticHave_ args => some args[1]!
+--       | _ =>
+--           none
+--       if let some ⟨lhs, type, rhs⟩ := Option.bind letDeclNode extractLhsTypeRhs
+--       then do
+--         IO.println type
+--         IO.println letDeclNode
+--         -- Extract the name from lhs
+--         let name? : Option Name :=
+--           match lhs with
+--           | Syntax.ident _ _ id _ => some id
+--           | _ => none
 
-      let haveDrafts' ← try
-        if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
-          pure #[]
-        else
-          ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
-        catch e =>
-          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
-          pure #[]
+--         match name? with
+--         | some n => IO.println s!"Name: {n}"
+--         | none   => IO.println "Pattern/wildcard lhs, no single name"
 
-      IO.println s!"goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
+--         -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
+--         -- let type ← match type with
+--         --   | some type => do Term.elabTerm type none
+--         --   | none => do Meta.inferType (← Term.elabTerm rhs none)
 
-      match ti.stx with
-      | .node _ _ _ =>
-        modify fun trace => {
-          trace with
-            -- tactics := trace.tactics.push {
-            --   goalsBefore := goalsBefore,
-            --   goalsAfter := goalsAfter,
-            --   pos := posBefore,
-            --   endPos := posAfter,
-            --   tactic := tacticText,
-            -- },
-            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
-              goal := x,
-              name := n,
-              haveDraft := y,
-              tactic := tacticText,
-            })),
-        }
-      | _ => pure ()
+--         let expr : Expr ←
+--           Term.elabTerm rhs none
+--         if let some type := type then
+--           let type : Expr ← Term.elabTerm type none
+--           IO.println type
+--         let type ← ctxBefore.runMetaM {} (Meta.inferType expr)
+--         IO.println s!"Elaborated RHS expr: {← ppExpr expr}"
+--       let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
+--       let goalsAfter ← ctxAfter.runMetaM {} (ti.goalsAfter.toArray.mapM Meta.ppGoal)
+--       -- if goalsBefore.map (·.pretty) == #[] || goalsBefore.map (·.pretty) == goalsAfter.map (·.pretty) then
+--       --   pure ()
+--       -- else
+--       let some posBefore := ti.stx.getPos? true | pure ()
+--       let some posAfter := ti.stx.getTailPos? true | pure ()
 
-    | ``Lean.Parser.Tactic.induction =>
-      match i.stx.getRange? with
-      | some r =>
-        let goalsAfter' ← getSubNodePositions parent r.start r.stop ctx
-        let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Meta.ppGoal)
-        IO.println s!"pattern match goalsAfter: {goalsAfter}"
-        let ctxBefore := { ctx with mctx := ti.mctxBefore }
-        let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
-        let some posBefore := ti.stx.getPos? true | pure ()
-        let some posAfter := ti.stx.getTailPos? true | pure ()
+--       -- Extract the actual tactic text from the source
+--       let tacticText := ctx.fileMap.source.extract posBefore posAfter
 
-        let tacticText := ctx.fileMap.source.extract posBefore posAfter
+--       IO.println s!"tactic text: {tacticText}"
 
-        IO.println s!"tactic text: {tacticText}"
+--       let haveDrafts' ← try
+--         if ["intro", "intros", "rintro"].any (·.isPrefixOf tacticText) then
+--           pure #[]
+--         else
+--           ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter tacticText)
+--         catch e =>
+--           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
+--           pure #[]
 
-        let haveDrafts' ← try
-          ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter' tacticText)
-        catch e =>
-          IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
-          pure #[]
+--       IO.println s!"goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
 
-        IO.println s!"ind match goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
+--       match ti.stx with
+--       | .node _ _ _ =>
+--         modify fun trace => {
+--           trace with
+--             -- tactics := trace.tactics.push {
+--             --   goalsBefore := goalsBefore,
+--             --   goalsAfter := goalsAfter,
+--             --   pos := posBefore,
+--             --   endPos := posAfter,
+--             --   tactic := tacticText,
+--             -- },
+--             haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
+--               goal := x,
+--               name := n,
+--               haveDraft := y,
+--               tactic := tacticText,
+--             })),
+--         }
+--       | _ => pure ()
 
-        modify fun trace => {
-          trace with
-            haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
-              goal := x,
-              name := n,
-              haveDraft := y,
-              tactic := tacticText,
-            })),
-        }
-      | none => pure ()
-      pure ()
-    | _ => pure ()
-  | _ => pure ()
+--     | ``Lean.Parser.Tactic.induction | ``Lean.Parser.Tactic.cases =>
+--       match i.stx.getRange? with
+--       | some r =>
+--         let goalsAfter' ← getSubNodePositions parent r.start r.stop ctx
+--         let goalsAfter ← ctx.runMetaM {} (goalsAfter'.mapM Meta.ppGoal)
+--         IO.println s!"pattern match goalsAfter: {goalsAfter}"
+--         let ctxBefore := { ctx with mctx := ti.mctxBefore }
+--         let goalsBefore ← ctxBefore.runMetaM {} (ti.goalsBefore.toArray.mapM Meta.ppGoal)
+--         let some posBefore := ti.stx.getPos? true | pure ()
+--         let some posAfter := ti.stx.getTailPos? true | pure ()
 
-private def visitInfo (ctx : ContextInfo) (i : Info) (parent : InfoTree) (_ : Environment) : TraceM Unit := do
-  match i with
-  | .ofTacticInfo ti => visitTacticInfo ctx ti parent
-  | _ => pure ()
+--         let tacticText := ctx.fileMap.source.extract posBefore posAfter
+
+--         IO.println s!"tactic text: {tacticText}"
+
+--         let haveDrafts' ← try
+--           ctx.runMetaM {} (haveDrafts ti.goalsBefore goalsAfter' tacticText)
+--         catch e =>
+--           IO.println (f!"Failed to process tactic pair.\nGoals before: {goalsBefore}.\nGoals after: {goalsAfter} errr: {← e.toMessageData.format}\n\n")
+--           pure #[]
+
+--         IO.println s!"ind match goalsBefore: {goalsBefore} goalsAfter: {goalsAfter} haveDrafts': {haveDrafts'}"
+
+--         modify fun trace => {
+--           trace with
+--             haveDrafts := if haveDrafts'.isEmpty then trace.haveDrafts else trace.haveDrafts.append (haveDrafts'.map (fun (x, n, y) => {
+--               goal := x,
+--               name := n,
+--               haveDraft := y,
+--               tactic := tacticText,
+--             })),
+--         }
+--       | none => pure ()
+--       pure ()
+--     | _ => pure ()
+--   | _ => pure ()
+
+-- private def visitInfo (ctx : ContextInfo) (i : Info) (parent : InfoTree) (_ : Environment) : TraceM Unit := do
+--   match i with
+--   | .ofTacticInfo ti => visitTacticInfo ctx ti parent
+--   | _ => pure ()
 
 
-private partial def traverseTree (ctx: ContextInfo) (tree : InfoTree)
-(parent : InfoTree) (env : Environment) : TraceM Unit := do
-  match tree with
-  | .context ctx' t =>
-    match ctx'.mergeIntoOuter? ctx with
-    | some ctx' => traverseTree ctx' t tree env
-    | none => panic! "fail to synthesis contextInfo when traversing infoTree"
-  | .node i children =>
-    visitInfo ctx i parent env
-    for x in children do
-      traverseTree ctx x tree env
-  | _ => pure ()
+-- private partial def traverseTree (ctx: ContextInfo) (tree : InfoTree)
+-- (parent : InfoTree) (env : Environment) : TraceM Unit := do
+--   match tree with
+--   | .context ctx' t =>
+--     match ctx'.mergeIntoOuter? ctx with
+--     | some ctx' => traverseTree ctx' t tree env
+--     | none => panic! "fail to synthesis contextInfo when traversing infoTree"
+--   | .node i children =>
+--     visitInfo ctx i parent env
+--     for x in children do
+--       traverseTree ctx x tree env
+--   | _ => pure ()
+
+-- private def traverseTopLevelTree (tree : InfoTree) (env : Environment) : TraceM Unit := do
+--   match tree with
+--   | .context ctx t =>
+--     match ctx.mergeIntoOuter? none with
+--     | some ctx => traverseTree ctx t tree env
+--     | none => panic! "fail to synthesis contextInfo for top-level infoTree"
+--   | _ => pure ()
 
 
-private def traverseTopLevelTree (tree : InfoTree) (env : Environment) : TraceM Unit := do
-  match tree with
-  | .context ctx t =>
-    match ctx.mergeIntoOuter? none with
-    | some ctx => traverseTree ctx t tree env
-    | none => panic! "fail to synthesis contextInfo for top-level infoTree"
-  | _ => pure ()
-
-
-/--
-Process an array of `InfoTree` (one for each top-level command in the file).
--/
-def traverseForest (trees : Array InfoTree) (env : Environment) : TraceM Trace := do
-  for t in trees do
-    traverseTopLevelTree t env
-  get
+-- /--
+-- Process an array of `InfoTree` (one for each top-level command in the file).
+-- -/
+-- def traverseForest (trees : Array InfoTree) (env : Environment) : TraceM Trace := do
+--   for t in trees do
+--     traverseTopLevelTree t env
+--   get
 
 
 end Traversal
@@ -522,50 +560,38 @@ def getImports (header: TSyntax `Lean.Parser.Module.header) : IO String := do
 
   return s.trim
 
-
 /--
 Trace a *.lean file.
 -/
 unsafe def processFile (path : FilePath) : IO Unit := do
   println! path
   let input ← IO.FS.readFile path
-  enableInitializersExecution
-  let inputCtx := Parser.mkInputContext input path.toString
-  let (header, parserState, messages) ← Parser.parseHeader inputCtx
-  let (env, messages) ← processHeader header {} messages inputCtx
+  -- Split the processing into two phases to prevent self-reference in proofs in tactic mode
+  let (_, _, _, trees) ← IO.processInput input none
 
-  if messages.hasErrors then
-    for msg in messages.toList do
-      if msg.severity == .error then
-        println! "ERROR: {← msg.toString}"
-    throw $ IO.userError "Errors during import; aborting"
+  let tactics := (trees.flatMap (Lean.Elab.InfoTree.findTacticNodes)).toArray
 
-  let env := env.setMainModule (← moduleNameOfFileName path none)
-  let commandState := { Command.mkState env messages {} with infoState.enabled := true }
-  let s ← IO.processCommands inputCtx parserState commandState
-  let env' := s.commandState.env
-  let trees := s.commandState.infoState.trees.toArray
+  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ =>
+    let (pb, pa) := stxRange ctx.fileMap ti.stx
+    let pb := ctx.fileMap.ofPosition pb
+    let pa := ctx.fileMap.ofPosition pa
+    ctx.runMetaM {} (haveDrafts ti.goalsBefore ti.goalsAfter (ctx.fileMap.source.extract pb pa)))
 
-  let traceM := (traverseForest trees env').run' ⟨#[]⟩
-  let (trace, _) ← traceM.run'.toIO {fileName := s!"{path}", fileMap := FileMap.ofString input} {env := env}
-
+  let trace := drafts.toJson
   let cwd ← IO.currentDir
   assert! cwd.fileName != "lean4"
 
   let some relativePath := Path.relativeTo path cwd | throw $ IO.userError s!"Invalid path: {path}"
   let json_path := Path.toBuildDir "ir" relativePath "ast.json" |>.get!
   Path.makeParentDirs json_path
-  IO.FS.writeFile json_path (toJson trace).pretty
+  IO.FS.writeFile json_path trace.pretty
 
   let dep_path := Path.toBuildDir "ir" relativePath "dep_paths" |>.get!
   Path.makeParentDirs dep_path
+  let inputCtx := Parser.mkInputContext input path.toString
+  let (header, _, _) ← Parser.parseHeader inputCtx
   IO.FS.writeFile dep_path (← getImports header)
 
-
-end LeanDojo
-
-
-open LeanDojo
 
 /--
 Whether a *.lean file should be traced.
