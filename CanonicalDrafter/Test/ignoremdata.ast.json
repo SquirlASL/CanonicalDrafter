@@ -1,12 +1,11 @@
-{"haveDrafts":
- [{"tactic": "borelize 𝕜",
-   "name": "this",
-   "haveDraft": "BorelSpace 𝕜",
-   "goal":
-   "𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"},
-  {"tactic": "have h1 : Function.Injective (comap f) := by sorry",
-   "name": "h1",
-   "haveDraft":
-   "Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)",
-   "goal":
-   "R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"}]}
+[{"tactic": "borelize 𝕜",
+  "name": "this",
+  "haveDraft": "BorelSpace 𝕜",
+  "goal":
+  "𝕜 : Type u_1\ninst✝⁸ : NontriviallyNormedField 𝕜\ninst✝⁷ : LocallyCompactSpace 𝕜\nE : Type u_2\ninst✝⁶ : NormedAddCommGroup E\ninst✝⁵ : NormedSpace 𝕜 E\ninst✝⁴ : MeasurableSpace E\ninst✝³ : OpensMeasurableSpace E\nF : Type u_3\ninst✝² : NormedAddCommGroup F\ninst✝¹ : NormedSpace 𝕜 F\ninst✝ : CompleteSpace F\nf : E → F\nv : E\nhf : Continuous f\n⊢ MeasurableSet {x | LineDifferentiableAt 𝕜 f x v}"},
+ {"tactic": "have h1 : Function.Injective (comap f) := by sorry",
+  "name": "h1",
+  "haveDraft":
+  "Function.Injective (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)",
+  "goal":
+  "R : Type u_3\nS : Type u_4\ninst✝¹ : CommRing R\ninst✝ : CommRing S\nf : R →+* S\nH : ∀ (x : S), ∃ n > 0, x ^ n ∈ f.range\nhker : RingHom.ker f ≤ nilradical R\n⊢ IsHomeomorph (⇑(comap f) : PrimeSpectrum S → PrimeSpectrum R)"}]

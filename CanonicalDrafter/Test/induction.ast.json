@@ -1,25 +1,24 @@
-{"haveDrafts":
- [{"tactic": "induction b",
-   "name": "zero",
-   "haveDraft": "a * 0 ≠ 0 → a ≤ a * 0",
-   "goal": "a b : Nat\nh : a * b ≠ 0\n⊢ a ≤ a * b"},
-  {"tactic": "induction b",
-   "name": "succ",
-   "haveDraft":
-   "∀ (n : Nat), (a * n ≠ 0 → a ≤ a * n) → a * (n + 1) ≠ 0 → a ≤ a * (n + 1)",
-   "goal":
-   "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → a ≤ a * 0\n⊢ a ≤ a * b"},
-  {"tactic": "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq]",
-   "name": "simp",
-   "haveDraft": "a = 0",
-   "goal": "a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"},
-  {"tactic": "simp only [Nat.zero_add, Nat.add_eq]",
-   "name": "simp",
-   "haveDraft": "a.le a",
-   "goal":
-   "a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ (fun t ↦ a.le (t.add a)) Nat.zero"},
-  {"tactic": "simp only [Nat.add_eq, Nat.succ_add]",
-   "name": "simp",
-   "haveDraft": "a.le (n + a).succ",
-   "goal":
-   "a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ (fun t ↦ a.le (t.add a)) n.succ"}]}
+[{"tactic": "induction b",
+  "name": "zero",
+  "haveDraft": "a * 0 ≠ 0 → a ≤ a * 0",
+  "goal": "a b : Nat\nh : a * b ≠ 0\n⊢ a ≤ a * b"},
+ {"tactic": "induction b",
+  "name": "succ",
+  "haveDraft":
+  "∀ (n : Nat), (a * n ≠ 0 → a ≤ a * n) → a * (n + 1) ≠ 0 → a ≤ a * (n + 1)",
+  "goal":
+  "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → a ≤ a * 0\n⊢ a ≤ a * b"},
+ {"tactic": "simp only [Nat.le_eq, Nat.le_zero_eq, Nat.mul_zero, Nat.mul_eq]",
+  "name": "simp",
+  "haveDraft": "a = 0",
+  "goal": "a : Nat\nh : a * 0 ≠ 0\n⊢ a ≤ a * 0"},
+ {"tactic": "simp only [Nat.zero_add, Nat.add_eq]",
+  "name": "simp",
+  "haveDraft": "a.le a",
+  "goal":
+  "a n : Nat\nh_1 : a * n ≠ 0 → a ≤ a * n\nh : a * (n + 1) ≠ 0\n⊢ (fun t ↦ a.le (t.add a)) Nat.zero"},
+ {"tactic": "simp only [Nat.add_eq, Nat.succ_add]",
+  "name": "simp",
+  "haveDraft": "a.le (n + a).succ",
+  "goal":
+  "a n✝ : Nat\nh_1 : a * n✝ ≠ 0 → a ≤ a * n✝\nh : a * (n✝ + 1) ≠ 0\nn : Nat\nn_ih : (fun t ↦ a.le (t.add a)) n\n⊢ (fun t ↦ a.le (t.add a)) n.succ"}]

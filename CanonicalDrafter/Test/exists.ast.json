@@ -1,5 +1,4 @@
-{"haveDrafts":
- [{"tactic": "use 2",
-   "name": "h",
-   "haveDraft": "2 + b = b + 2",
-   "goal": "b : ℕ\n⊢ ∃ x, x + b = b + x"}]}
+[{"tactic": "use 2",
+  "name": "h",
+  "haveDraft": "2 + b = b + 2",
+  "goal": "b : ℕ\n⊢ ∃ x, x + b = b + x"}]

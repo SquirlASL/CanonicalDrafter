@@ -1,38 +1,37 @@
-{"haveDrafts":
- [{"tactic": "rcases hne, hbdd with ⟨⟨L, hL⟩, ⟨U, hU⟩⟩",
-   "name": "intro",
-   "haveDraft": "∀ L ∈ s, ∀ U ∈ upperBounds s, ∃ x, IsLUB s x",
-   "goal": "s : Set ℝ\nhne : s.Nonempty\nhbdd : BddAbove s\n⊢ ∃ x, IsLUB s x"},
-  {"tactic":
-   "have : ∀ d : ℕ, BddAbove { m : ℤ | ∃ y ∈ s, (m : ℝ) ≤ y * d } := by\n    obtain ⟨k, hk⟩ := exists_int_gt U\n    refine fun d => ⟨k * d, fun z h => ?_⟩\n    rcases h with ⟨y, yS, hy⟩\n    refine Int.cast_le.1 (hy.trans ?_)\n    push_cast\n    exact mul_le_mul_of_nonneg_right ((hU yS).trans hk.le) d.cast_nonneg",
-   "name": "this",
-   "haveDraft": "∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\n⊢ ∃ x, IsLUB s x"},
-  {"tactic": "obtain ⟨k, hk⟩ := exists_int_gt U",
-   "name": "intro",
-   "haveDraft":
-   "∀ (k : ℤ), U < (↑k : ℝ) → ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\n⊢ ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
-  {"tactic": "refine fun d => ⟨k * d, fun z h => ?_⟩",
-   "name": "intro",
-   "haveDraft":
-   "∀ (d : ℕ), ∀ z ∈ {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}, z ≤ k * (↑d : ℤ)",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\n⊢ ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
-  {"tactic": "rcases h with ⟨y, yS, hy⟩",
-   "name": "intro",
-   "haveDraft": "∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ k * (↑d : ℤ)",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\nh : z ∈ {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}\n⊢ z ≤ k * (↑d : ℤ)"},
-  {"tactic": "refine Int.cast_le.1 (hy.trans ?_)",
-   "name": "intro",
-   "haveDraft": "y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ z ≤ k * (↑d : ℤ)"},
-  {"tactic": "push_cast",
-   "name": "intro",
-   "haveDraft": "y * (↑d : ℝ) ≤ (↑k : ℝ) * (↑d : ℝ)",
-   "goal":
-   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)"}]}
+[{"tactic": "rcases hne, hbdd with ⟨⟨L, hL⟩, ⟨U, hU⟩⟩",
+  "name": "intro",
+  "haveDraft": "∀ L ∈ s, ∀ U ∈ upperBounds s, ∃ x, IsLUB s x",
+  "goal": "s : Set ℝ\nhne : s.Nonempty\nhbdd : BddAbove s\n⊢ ∃ x, IsLUB s x"},
+ {"tactic":
+  "have : ∀ d : ℕ, BddAbove { m : ℤ | ∃ y ∈ s, (m : ℝ) ≤ y * d } := by\n    obtain ⟨k, hk⟩ := exists_int_gt U\n    refine fun d => ⟨k * d, fun z h => ?_⟩\n    rcases h with ⟨y, yS, hy⟩\n    refine Int.cast_le.1 (hy.trans ?_)\n    push_cast\n    exact mul_le_mul_of_nonneg_right ((hU yS).trans hk.le) d.cast_nonneg",
+  "name": "this",
+  "haveDraft": "∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\n⊢ ∃ x, IsLUB s x"},
+ {"tactic": "obtain ⟨k, hk⟩ := exists_int_gt U",
+  "name": "intro",
+  "haveDraft":
+  "∀ (k : ℤ), U < (↑k : ℝ) → ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\n⊢ ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
+ {"tactic": "refine fun d => ⟨k * d, fun z h => ?_⟩",
+  "name": "intro",
+  "haveDraft":
+  "∀ (d : ℕ), ∀ z ∈ {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}, z ≤ k * (↑d : ℤ)",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\n⊢ ∀ (d : ℕ), BddAbove {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
+ {"tactic": "rcases h with ⟨y, yS, hy⟩",
+  "name": "intro",
+  "haveDraft": "∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ k * (↑d : ℤ)",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\nh : z ∈ {m | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}\n⊢ z ≤ k * (↑d : ℤ)"},
+ {"tactic": "refine Int.cast_le.1 (hy.trans ?_)",
+  "name": "intro",
+  "haveDraft": "y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ z ≤ k * (↑d : ℤ)"},
+ {"tactic": "push_cast",
+  "name": "intro",
+  "haveDraft": "y * (↑d : ℝ) ≤ (↑k : ℝ) * (↑d : ℝ)",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)"}]

@@ -1,9 +1,4 @@
-{"haveDrafts":
- [{"tactic": "rw [add_comm]",
-   "name": "rw",
-   "haveDraft": "⟨1, sorry⟩ = a + 0",
-   "goal": "a : Fin 3\n⊢ ⟨1, sorry⟩ = 0 + a"},
-  {"tactic": "add_comm",
-   "name": "add_comm",
-   "haveDraft": "⟨1, sorry⟩ = a + 0",
-   "goal": "a : Fin 3\n⊢ ⟨1, sorry⟩ = 0 + a"}]}
+[{"tactic": "rw [add_comm]",
+  "name": "rw",
+  "haveDraft": "⟨1, sorry⟩ = a + 0",
+  "goal": "a : Fin 3\n⊢ ⟨1, sorry⟩ = 0 + a"}]

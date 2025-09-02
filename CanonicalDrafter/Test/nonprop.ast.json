@@ -1,5 +1,4 @@
-{"haveDrafts":
- [{"tactic": "rcases h with ⟨x, hx⟩",
-   "name": "intro",
-   "haveDraft": "∀ (x : Nat), 2 * x = 1 → False",
-   "goal": "h : ∃ x, 2 * x = 1\n⊢ False"}]}
+[{"tactic": "rcases h with ⟨x, hx⟩",
+  "name": "intro",
+  "haveDraft": "∀ (x : Nat), 2 * x = 1 → False",
+  "goal": "h : ∃ x, 2 * x = 1\n⊢ False"}]
