@@ -497,6 +497,7 @@ def processAllFiles (noDeps : Bool) : IO Unit := do
 unsafe def main (args : List String) : IO Unit := do
   match args with
   | ["noDeps"] => processAllFiles (noDeps := true)
-  | [path] => processFile (← Path.toAbsolute ⟨path⟩)
+  | [path] => try processFile (← Path.toAbsolute ⟨path⟩) catch e =>
+      println! s!"WARNING: Failed to process {path}: {e}"
   | [] => processAllFiles (noDeps := false)
   | _ => throw $ IO.userError "Invalid arguments"

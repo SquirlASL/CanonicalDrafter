@@ -9,7 +9,8 @@ package canonicaldrafter where
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4" @ "v4.21.0"
 
-require "chasenorman" / "Canonical"
+require Canonical from git
+  "https://github.com/chasenorman/CanonicalLean" @ "v4.21.0"
 
 require REPL from git "https://github.com/leanprover-community/repl" @ "v4.21.0"
 
