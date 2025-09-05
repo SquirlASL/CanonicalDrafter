@@ -13,6 +13,7 @@ NC='\033[0m' # No Color
 echo "Building Dependencies"
 lake exe cache get
 lake build Mathlib
+lake build REPL
 
 TOOLCHAIN_DIR=$(lean --print-prefix)
 TARGET_DIR=".lake/packages/lean4"
