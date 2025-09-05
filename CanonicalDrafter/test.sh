@@ -49,20 +49,20 @@ for leanfile in $TEST_DIR/*.lean; do
     # Define the path where ExtractData actually outputs the file
     producedfile=".lake/build/ir/Test/$base.ast.json"
 
-    # Run ExtractData and capture error output
-    errfile=$(mktemp)
-    lake env lean --run ExtractData.lean "$leanfile" > /dev/null 2> "$errfile"
+    # Run ExtractData and capture both stdout and stderr
+    outtmp=$(mktemp)
+    lake env lean --run ExtractData.lean "$leanfile" > "$outtmp" 2>&1
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}FAILED (execution error)${NC}"
         echo "ExtractData failed to process $leanfile"
         echo "Error output:"
-        cat "$errfile"
-        rm "$errfile"
+        cat "$outtmp"
+        rm "$outtmp"
         ((failed++))
         continue
     fi
-    rm "$errfile"
+    rm "$outtmp"
 
     # Check if the produced file was actually created
     if [[ ! -f "$producedfile" ]]; then
