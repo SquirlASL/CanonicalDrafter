@@ -1,7 +1,7 @@
 import Mathlib
 
 -- certain tactics are "banned" meaning that they won't be considered by the havedraft tracer
--- right now the banned ones are `intro, intros, rintro`
+-- right now the banned ones are `intro, intros, rintro, expose_names`
 
 theorem test_intro : ∀ (a : Nat), a = a := by
   intro a
@@ -14,3 +14,7 @@ theorem test_intros : ∀ (a b : Nat), a = a ∧ b = b := by
 theorem test_rintro : ∀ (ab : Nat × Nat), ab.1 = ab.1 ∧ ab.2 = ab.2 := by
   rintro ⟨a, b⟩
   sorry
+
+theorem test_expose_names [Inhabited Nat] (a b : Nat) (h : a = b) : b = a := by
+  expose_names
+  exact h.symm
