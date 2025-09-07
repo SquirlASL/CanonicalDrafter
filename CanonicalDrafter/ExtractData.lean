@@ -76,6 +76,7 @@ structure HaveDraft where
   name : String
   goal : String
   haveDraft : String
+  imp: Bool
   deriving ToJson
 
 /--
@@ -153,14 +154,13 @@ def haveDrafts
             let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
             fvars := fvars.push (.fvar noted.1)
             goal := noted.2
-            result := result.push ⟨tacticText, name, goalString, typeString⟩
+            result := result.push ⟨tacticText, name, goalString, typeString, false⟩
           return result
 
     let mut out : Array HaveDraft := #[]
     let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
 
     -- IO.println s!"{← gBefore.withContext do ppExpr (← gBefore.getType)} num goals after: {goalsAfter.length}"
-
     for gAfter in goalsAfter do
       let newHyps ← newHyps gBefore gAfter
       let gAfterName := ((← getMCtx).getDecl gAfter).userName
@@ -168,8 +168,8 @@ def haveDrafts
       let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
       let name := ← goal.withContext do disambiguate (desiredName gAfterName tacticText)
       let typeString := ← gAfter.withContext do return ((← ppExpr imp).pretty.replace "⋯" "sorry")
-      out := out.push ⟨tacticText, name, goalString, typeString⟩
-      goal := (← goal.note name.toName (← Meta.mkSorry imp false) imp).2
+      out := out.push ⟨tacticText, name, goalString, typeString, true⟩
+      goal := (← goal.note name.toName (← goal.withContext do Meta.mkSorry imp false) imp).2
     return out
   | _ => return #[]
 
@@ -401,20 +401,23 @@ def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveD
         --      "⟩")])]
         --  [":" («term_∧_» («term_=_» (num "2") "=" (num "2")) "∧" («term_=_» (num "3") "=" (num "3")))]
         --  [":=" [(Term.anonymousCtor "⟨" [`rfl "," `rfl] "⟩")]])
-        some ⟨some (args[2]!.getArg 1), (args[3]!.getArg 2).getArg 0⟩
+        some ⟨some (args[2]!.getArg 1), (args[args.size - 1]!.getArg 1).getArg 0⟩
       | _ => none
     if let some ⟨type, rhs⟩ := test then ti.goalsBefore[0]!.withContext do
+      -- IO.println s!"rhs: {rhs}"
       -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
       let type ← Lean.Elab.Term.TermElabM.run' do match type with
         | some type => Term.elabTerm type none
-        | none => Meta.inferType (← Term.elabTerm rhs none)
+        | none => ti.goalsAfter[0]!.withContext do Meta.inferType (← Term.elabTerm rhs none)
+
+      -- IO.println s!"type: {← Meta.ppExpr type}"
 
       let newHyps ← newHyps ti.goalsBefore[0]! ti.goalsAfter[0]!
 
       if (← Meta.isProp type) ∧ !(← newHyps.allM (Meta.isProp ·.type)) then
         let draft := (← Meta.ppExpr type).pretty
         let goal := (← Meta.ppGoal ti.goalsBefore[0]!).pretty
-        return #[(⟨tacticText, if let some x := newHyps[0]? then x.userName.toString else "this", goal, draft⟩ : HaveDraft)]
+        return #[(⟨tacticText, if let some x := newHyps[0]? then x.userName.toString else "this", goal, draft, false⟩ : HaveDraft)]
       else
         return ← haveDrafts ti.goalsBefore ti.goalsAfter tacticText
     else
@@ -434,7 +437,11 @@ unsafe def processFile (path : FilePath) : IO Unit := do
 
   let tactics := (← trees.flatMapM (findTacticNodes')).toArray
 
-  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ => ctx.runMetaM {} do MonadWithOptions.withOptions Pp.applyOptions do tacticToHaveDraft ti ctx)
+  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ => ctx.runMetaM {} do MonadWithOptions.withOptions Pp.applyOptions do try
+    tacticToHaveDraft ti ctx
+  catch e =>
+    IO.println s!"WARNING: Failed to process tactic {stxRange ctx.fileMap ti.stx}: {← e.toMessageData.format}";
+    pure #[])
   let trace := drafts.toJson
   let cwd ← IO.currentDir
   assert! cwd.fileName != "lean4"
