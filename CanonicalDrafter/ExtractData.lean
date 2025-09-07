@@ -401,14 +401,19 @@ def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveD
         --      "⟩")])]
         --  [":" («term_∧_» («term_=_» (num "2") "=" (num "2")) "∧" («term_=_» (num "3") "=" (num "3")))]
         --  [":=" [(Term.anonymousCtor "⟨" [`rfl "," `rfl] "⟩")]])
-        some ⟨some (args[2]!.getArg 1), (args[args.size - 1]!.getArg 1).getArg 0⟩
+        let type : Option Syntax :=
+          match (args[2]!.getArg 1) with
+          | Syntax.missing => none
+          | x => some x
+        some ⟨type, (args[args.size - 1]!.getArg 1).getArg 0⟩
       | _ => none
     if let some ⟨type, rhs⟩ := test then ti.goalsBefore[0]!.withContext do
       -- IO.println s!"rhs: {rhs}"
       -- Elaborate rhs to an expression in the meta context (TODO goalBefore.withContext)
-      let type ← Lean.Elab.Term.TermElabM.run' do match type with
+      let type ← Lean.Elab.Term.TermElabM.run' (do match type with
         | some type => Term.elabTerm type none
-        | none => ti.goalsAfter[0]!.withContext do Meta.inferType (← Term.elabTerm rhs none)
+        | none =>
+          Meta.inferType (← Term.elabTerm rhs none)) {errToSorry := false}
 
       -- IO.println s!"type: {← Meta.ppExpr type}"
 
