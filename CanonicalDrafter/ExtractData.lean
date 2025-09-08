@@ -68,15 +68,22 @@ structure TacticTrace where
   tactic: String       -- The actual tactic text.
 deriving ToJson
 
+inductive Kind
+| hypothesis : Kind
+| goal : Kind
+| original : Kind -- an actual declartion `let, have, obtain`
+deriving ToJson
+
 /-
  Given a current goal tactic state string the next relevant sublemmas/hypothesis to be "have drafted"
 -/
 structure HaveDraft where
   tactic : String
-  name : String
   goal : String
-  haveDraft : String
-  imp: Bool
+  kind : Kind
+  name : String
+  type : String
+  removals : Array String
   deriving ToJson
 
 /--
@@ -119,10 +126,14 @@ def extractHypsFromGoal (mvarId : MVarId) : MetaM (Array LocalDecl) := do
 
 open Lean Meta in
 
-def newHyps (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (Array LocalDecl) := do
-  -- let beforeTypes := (← extractHypsFromGoal goalBefore).map (·.type) -- TODO ordering
-  let beforeFVars := (← extractHypsFromGoal goalBefore).map (·.fvarId)
-  (← extractHypsFromGoal goalAfter).filterM fun h => do return !(beforeFVars.contains (h.fvarId))
+def hypsDiff (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (Array LocalDecl × Array LocalDecl) := do
+  let beforeDecls ← extractHypsFromGoal goalBefore
+  let afterDecls ← extractHypsFromGoal goalAfter
+  let beforeFVars := beforeDecls.map (·.fvarId)
+  let afterFVars := afterDecls.map (·.fvarId)
+  let newHyps := afterDecls.filter fun h => !(beforeFVars.contains h.fvarId)
+  let removals := beforeDecls.filter fun h => !(afterFVars.contains h.fvarId)
+  return (newHyps, removals)
 
 /-
  returns tuple and Array of (goal, name, type)
@@ -138,7 +149,7 @@ def haveDrafts
   | [gBefore] => do
     if let [gAfter'] := goalsAfter then
       if ← isDefEqGuarded (← gAfter'.getType) (← gBefore.getType) then -- isDefEq used instead of == for mdata
-        let newHyps ← newHyps gBefore gAfter'
+        let (newHyps, removals) ← hypsDiff gBefore gAfter'
         let fvarNewHyps := newHyps.filter (fun h => !h.isLet)
         let letNewHyps := newHyps.filter (fun h => h.isLet)
         if ← gAfter'.withContext do fvarNewHyps.allM (fun h => isProp h.type) then
@@ -154,7 +165,9 @@ def haveDrafts
             let noted := (← goal.note name.toName (← Meta.mkSorry replaced false) (replaced))
             fvars := fvars.push (.fvar noted.1)
             goal := noted.2
-            result := result.push ⟨tacticText, name, goalString, typeString, false⟩
+            result := result.push {
+              tactic := tacticText, name, goal := goalString, type := typeString, kind := Kind.hypothesis, removals := removals.map (·.userName.toString)
+            }
           return result
 
     let mut out : Array HaveDraft := #[]
@@ -162,13 +175,15 @@ def haveDrafts
 
     -- IO.println s!"{← gBefore.withContext do ppExpr (← gBefore.getType)} num goals after: {goalsAfter.length}"
     for gAfter in goalsAfter do
-      let newHyps ← newHyps gBefore gAfter
+      let (newHyps, removals) ← hypsDiff gBefore gAfter
       let gAfterName := ((← getMCtx).getDecl gAfter).userName
       let imp ← gAfter.withContext do mkCurriedImplication newHyps (← gAfter.getType)
       let goalString := (← Meta.ppGoal goal).pretty.replace "⋯" "sorry"
       let name := ← goal.withContext do disambiguate (desiredName gAfterName tacticText)
       let typeString := ← gAfter.withContext do return ((← ppExpr imp).pretty.replace "⋯" "sorry")
-      out := out.push ⟨tacticText, name, goalString, typeString, true⟩
+      out := out.push {
+        tactic := tacticText, name, goal := goalString, type := typeString, kind := Kind.goal, removals := removals.map (·.userName.toString)
+      }
       goal := (← goal.note name.toName (← goal.withContext do Meta.mkSorry imp false) imp).2
     return out
   | _ => return #[]
@@ -417,12 +432,15 @@ def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveD
 
       -- IO.println s!"type: {← Meta.ppExpr type}"
 
-      let newHyps ← newHyps ti.goalsBefore[0]! ti.goalsAfter[0]!
+      let (newHyps, removals) ← hypsDiff ti.goalsBefore[0]! ti.goalsAfter[0]!
 
       if (← Meta.isProp type) ∧ !(← newHyps.allM (Meta.isProp ·.type)) then
         let draft := (← Meta.ppExpr type).pretty
         let goal := (← Meta.ppGoal ti.goalsBefore[0]!).pretty
-        return #[(⟨tacticText, if let some x := newHyps[0]? then x.userName.toString else "this", goal, draft, false⟩ : HaveDraft)]
+        return #[({
+            tactic := tacticText, name := if let some x := newHyps[0]? then x.userName.toString else "this", goal,
+            type := draft, kind := Kind.original, removals := removals.map (·.userName.toString)
+        })]
       else
         return ← haveDrafts ti.goalsBefore ti.goalsAfter tacticText
     else
