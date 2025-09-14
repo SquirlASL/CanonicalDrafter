@@ -58,8 +58,8 @@ def letDrafter (tacticState : String) (filePath : String := "data.json") : IO (S
     IO.println tacticState
     match map.get? tacticState with
     | some val => pure ("q", val)
-    | none     => pure ("__", "KEY_NOT_FOUND")
-  | Except.error e => pure (tacticState, s!"ERROR_PARSING_JSON: {e}")
+    | none     => pure ("failed could not find tactic state", "sorry")
+  | Except.error e => pure ("failed map invalid" ++ e, "sorry")
 
 
 -- elab "try_drafter " : tactic => do
