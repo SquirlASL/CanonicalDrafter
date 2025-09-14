@@ -135,6 +135,9 @@ def hypsDiff (goalBefore : MVarId) (goalAfter : MVarId) : MetaM (Array LocalDecl
   let removals := beforeDecls.filter fun h => !(afterFVars.contains h.fvarId)
   return (newHyps, removals)
 
+-- mvar with same type as the goal (but doesn't have the metadata/name)
+def goalCopy (goal : MVarId) : MetaM MVarId := do
+  return (← goal.withContext do mkFreshExprMVar (← goal.getType)).mvarId!
 /-
  returns tuple and Array of (goal, name, type)
 -/
@@ -153,7 +156,7 @@ def haveDrafts
         let fvarNewHyps := newHyps.filter (fun h => !h.isLet)
         let letNewHyps := newHyps.filter (fun h => h.isLet)
         if ← gAfter'.withContext do fvarNewHyps.allM (fun h => isProp h.type) then
-          let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
+          let mut goal ← goalCopy gBefore
           let mut result : Array HaveDraft := #[]
           let mut fvars := #[]
           for (h, idx) in fvarNewHyps.zipIdx do
@@ -171,7 +174,7 @@ def haveDrafts
           return result
 
     let mut out : Array HaveDraft := #[]
-    let mut goal := (← gBefore.withContext do mkFreshExprMVar (← gBefore.getType)).mvarId!
+    let mut goal ← goalCopy gBefore
 
     -- IO.println s!"{← gBefore.withContext do ppExpr (← gBefore.getType)} num goals after: {goalsAfter.length}"
     for gAfter in goalsAfter do
@@ -436,7 +439,7 @@ def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveD
 
       if (← Meta.isProp type) ∧ !(← newHyps.allM (Meta.isProp ·.type)) then
         let draft := (← Meta.ppExpr type).pretty
-        let goal := (← Meta.ppGoal ti.goalsBefore[0]!).pretty
+        let goal := (← Meta.ppGoal (← goalCopy ti.goalsBefore[0]!)).pretty
         return #[({
             tactic := tacticText, name := if let some x := newHyps[0]? then x.userName.toString else "this", goal,
             type := draft, kind := Kind.original, removals := removals.map (·.userName.toString)
@@ -498,7 +501,6 @@ def shouldProcess (path : FilePath) (noDeps : Bool) : IO Bool := do
   let some oleanPath := Path.toBuildDir "lib/lean" relativePath "olean" |
     throw $ IO.userError s!"Invalid path: {path}"
   return ← oleanPath.pathExists
-
 
 /--
 Trace all *.lean files in the current directory whose corresponding *.olean file exists.
