@@ -1,4 +1,6 @@
-[{"tactic": "rcases h with ⟨x, hx⟩",
+[{"type": "∀ (x : Nat), 2 * x = 1 → False",
+  "tactic": "rcases h with ⟨x, hx⟩",
+  "removals": ["h"],
   "name": "intro",
-  "haveDraft": "∀ (x : Nat), 2 * x = 1 → False",
-  "goal": "h : ∃ x, 2 * x = 1\n⊢ False"}]
+  "kind": "goal",
+  "goal": "h : ∃ (x : Nat), 2 * x = 1\n⊢ False"}]

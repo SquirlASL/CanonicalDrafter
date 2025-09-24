@@ -1,4 +1,6 @@
-[{"tactic": "use 2",
+[{"type": "2 + b = b + 2",
+  "tactic": "use 2",
+  "removals": [],
   "name": "h",
-  "haveDraft": "2 + b = b + 2",
-  "goal": "b : ℕ\n⊢ ∃ x, x + b = b + x"}]
+  "kind": "goal",
+  "goal": "b : ℕ\n⊢ ∃ (x : ℕ), x + b = b + x"}]

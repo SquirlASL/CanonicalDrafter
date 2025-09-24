@@ -1,4 +1,6 @@
-[{"tactic": "rw [add_comm]",
+[{"type": "⟨1, sorry⟩ = a + 0",
+  "tactic": "rw [add_comm]",
+  "removals": [],
   "name": "rw",
-  "haveDraft": "⟨1, sorry⟩ = a + 0",
+  "kind": "goal",
   "goal": "a : Fin 3\n⊢ ⟨1, sorry⟩ = 0 + a"}]

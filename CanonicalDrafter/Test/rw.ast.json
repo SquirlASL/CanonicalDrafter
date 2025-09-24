@@ -1,4 +1,6 @@
-[{"tactic": "rw [Nat.mul_comm] at q",
+[{"type": "2 * 3 + 2 = 8",
+  "tactic": "rw [Nat.mul_comm, Nat.add_comm] at q",
+  "removals": ["q"],
   "name": "q₁",
-  "haveDraft": "2 + 2 * 3 = 8",
+  "kind": "hypothesis",
   "goal": "h : 2 = 2\nq : 2 + 3 * 2 = 8\n⊢ 1 + 1 = 3"}]

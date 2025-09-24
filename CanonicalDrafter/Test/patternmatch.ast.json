@@ -1,10 +1,14 @@
-[{"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
+[{"type": "a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
+  "tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
+  "removals": ["b", "h"],
   "name": "zero",
-  "haveDraft": "a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)",
+  "kind": "goal",
   "goal": "a b : Nat\nh : a * b ≠ 0\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"},
- {"tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
-  "name": "succ",
-  "haveDraft":
+ {"type":
   "∀ (n' : Nat),\n  (a * n' ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑n' : Int)) → a * (n' + 1) ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑(n' + 1) : Int)",
+  "tactic": "induction b with\n  | zero => sorry\n  | succ n' => sorry",
+  "removals": ["b", "h"],
+  "name": "succ",
+  "kind": "goal",
   "goal":
   "a b : Nat\nh : a * b ≠ 0\nzero : a * 0 ≠ 0 → (↑a : Int) ≤ (↑a : Int) * (↑0 : Int)\n⊢ (↑a : Int) ≤ (↑a : Int) * (↑b : Int)"}]

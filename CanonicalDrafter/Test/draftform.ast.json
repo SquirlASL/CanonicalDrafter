@@ -1,0 +1,63 @@
+[{"type": "∃ (n : ℤ), U < (↑n : ℝ)",
+  "tactic": "have q : ∃ (n : ℤ), U < (↑n : ℝ) := exists_int_gt U",
+  "removals": [],
+  "name": "q",
+  "kind": "hypothesis",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\n⊢ ∀ (d : ℕ), BddAbove {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
+ {"type":
+  "∀ (s : Set ℝ),\n  ∀ L ∈ s,\n    ∀ U ∈ upperBounds s, ∀ (q_w : ℤ), U < (↑q_w : ℝ) → ∀ (d : ℕ), BddAbove {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}",
+  "tactic": "destruct",
+  "removals": ["s", "L", "hL", "U", "hU", "q"],
+  "name": "destruct",
+  "kind": "goal",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq : ∃ (n : ℤ), U < (↑n : ℝ)\n⊢ ∀ (d : ℕ), BddAbove {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
+ {"type":
+  "∀ (d : ℕ), ∀ z ∈ {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}, z ≤ q_w * (↑d : ℤ)",
+  "tactic":
+  "have q : ∀ (d : ℕ), ∀ z ∈ {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}, z ≤ q_w * (↑d : ℤ) := by\n    intros; expose_names\n    have q : ∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ q_w * (↑d : ℤ) := by\n      clear h\n      intros; expose_names\n      have : y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ) := by\n        have q : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ) := by\n          exact mul_le_mul_of_nonneg_right ((hU h).trans q_h.le) d.cast_nonneg\n        push_cast; linarith\n      exact Int.cast_le.1 (h_1.trans this)\n    exact let ⟨y, yS, hy⟩ := h; q y yS hy",
+  "removals": [],
+  "name": "q",
+  "kind": "hypothesis",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\n⊢ ∀ (d : ℕ), BddAbove {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
+ {"type": "∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ q_w * (↑d : ℤ)",
+  "tactic":
+  "have q : ∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ q_w * (↑d : ℤ) := by\n      clear h\n      intros; expose_names\n      have : y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ) := by\n        have q : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ) := by\n          exact mul_le_mul_of_nonneg_right ((hU h).trans q_h.le) d.cast_nonneg\n        push_cast; linarith\n      exact Int.cast_le.1 (h_1.trans this)",
+  "removals": [],
+  "name": "q",
+  "kind": "hypothesis",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\nd : ℕ\nz : ℤ\nh : z ∈ {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}\n⊢ z ≤ q_w * (↑d : ℤ)"},
+ {"type": "y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ)",
+  "tactic":
+  "have : y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ) := by\n        have q : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ) := by\n          exact mul_le_mul_of_nonneg_right ((hU h).trans q_h.le) d.cast_nonneg\n        push_cast; linarith",
+  "removals": [],
+  "name": "this",
+  "kind": "hypothesis",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nh : y ∈ s\nh_1 : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ z ≤ q_w * (↑d : ℤ)"},
+ {"type": "y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ)",
+  "tactic":
+  "have q : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ) := by\n          exact mul_le_mul_of_nonneg_right ((hU h).trans q_h.le) d.cast_nonneg",
+  "removals": [],
+  "name": "q",
+  "kind": "hypothesis",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nh : y ∈ s\nh_1 : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ)"},
+ {"type": "y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ)",
+  "tactic": "push_cast",
+  "removals": [],
+  "name": "push_cast",
+  "kind": "goal",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nh : y ∈ s\nh_1 : (↑z : ℝ) ≤ y * (↑d : ℝ)\nq : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑(q_w * (↑d : ℤ)) : ℝ)"},
+ {"type":
+  "(↑q_w : ℝ) * (↑d : ℝ) < y * (↑d : ℝ) → y * (↑d : ℝ) - (↑q_w : ℝ) * (↑d : ℝ) + ((↑q_w : ℝ) * (↑d : ℝ) - y * (↑d : ℝ)) = 0",
+  "tactic": "linarith",
+  "removals": [],
+  "name": "linarith",
+  "kind": "goal",
+  "goal":
+  "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nq_w : ℤ\nq_h : U < (↑q_w : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nh : y ∈ s\nh_1 : (↑z : ℝ) ≤ y * (↑d : ℝ)\nq : y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑q_w : ℝ) * (↑d : ℝ)"}]
