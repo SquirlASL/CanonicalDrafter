@@ -8,4 +8,8 @@ example : 2 + 2 = 4 := by
   -- non fall through cases
   have bruh : ∃ x : Nat, x = x := ⟨5, rfl⟩
   let ⟨test1, test2⟩ := bruh
+  -- anonoymous types
+  have q := hi
+  obtain qq := hi
+  let qqq := hi
   rfl
