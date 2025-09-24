@@ -105,7 +105,9 @@ def applyOptions : Options → Options :=
   (pp.proofs.set · false |>
   (pp.motives.all.set · true |>
   (pp.coercions.types.set · true |>
-  (pp.unicode.fun.set · true))))
+  (pp.unicode.fun.set · true |>
+  (pp.funBinderTypes.set · true)))))
+
 open Lean Meta
 
 end Pp
