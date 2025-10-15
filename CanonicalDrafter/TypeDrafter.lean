@@ -18,22 +18,30 @@ def printForce (s : String) : IO Unit := do
   handle.putStrLn s
   handle.flush
 
-
 unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync String): TermElabM (Option Expr) := do
   -- if we exceed bounds then return none
   -- let goal ← introNP goal (typeArity1 goal.getType)
   -- exposeNames?
   goal.withContext do
+    draftOut.send (← Meta.ppGoal goal).pretty
     let duplicate := ← mkFreshExprMVar (← goal.getType)
-    let (remaining, stats) ← Aesop.search duplicate.mvarId!
+    let remaining ←
+      try
+        let config ← Aesop.Frontend.TacticConfig.parse (← `(tactic| aesop)) duplicate.mvarId!
+        let (remaining, stats) ← Aesop.search duplicate.mvarId! (← config.getRuleSet duplicate.mvarId!) config.options config.simpConfig
+            config.simpConfigSyntax?
+        pure remaining
+      catch e =>
+        draftErr.send (← e.toMessageData.format).pretty
+        pure #[duplicate.mvarId!]
+
     if remaining.isEmpty then
       return ← instantiateMVars duplicate -- return the `aesop` syntax
 
     -- attempt closers (in parallel)
-    -- let input := (← Meta.ppGoal goal).pretty
     let type ← draftIn.recv
     let (name, draft) : String × String := ("test", type) -- ← letDrafter input
-    printForce "wee"
+    -- printForce "wee"
     try
       let output ← elabStringAsExpr draft
       let subgoal ← mkFreshExprMVar output
@@ -43,9 +51,8 @@ unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync
           return some (.letE name.toName output value
             (body.abstract #[.fvar x]) false)
     catch e =>
-      printForce (← e.toMessageData.format).pretty
-    draftOut.send ("goal: ")
-    printForce "womp"
+      draftErr.send (← e.toMessageData.format).pretty
+    -- printForce "womp"
     return none
 
 structure RpcChannel where
@@ -85,48 +92,7 @@ def recv (params : RecvParams) : RequestM (RequestTask RpcString) := do
 
 @[widget_module]
 def refineWidget : Widget.Module where
-  javascript := "
-import * as React from 'react';
-import { useRpcSession, EditorContext, EnvPosContext } from '@leanprover/infoview';
-
-export default function (props) {
-  const pos = React.useContext(EnvPosContext);
-  const rs = useRpcSession();
-
-  const [value, setValue] = React.useState('');
-
-  React.useEffect(() => {
-    let cancelled = false;
-    async function poll(){
-      while (!cancelled) {
-        const res = await rs.call('Typewriter.recv', { pos: pos, channel: props.draftOut });
-        setValue(res.response);
-      }
-    }
-    poll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const onEnter = async (e) => {
-    e.preventDefault();
-    await rs.call('Typewriter.send', { pos: pos, text: value, channel: props.draftIn });
-  };
-
-  return React.createElement(
-    'form',
-    { onSubmit: onEnter },
-    React.createElement('input', {
-      type: 'text',
-      value: value,
-      onChange: (e) => setValue(e.target.value),
-      placeholder: 'Type something and press Enter…',
-    })
-  );
-}
-"
+  javascript := include_str "TypeDrafter.js"
 
 open Lean Meta Elab Tactic
 
@@ -142,12 +108,13 @@ unsafe def elabTypeWriteImpl : TacticM Unit := do
 
   let goal ← getMainGoal
   goal.admit
+  let duplicate := (← mkFreshExprMVar (← goal.getType)).mvarId!
   let ctxCore : Core.Context ← monadLift (read : CoreM Core.Context)
   let sCore : Core.State ← monadLift (get : CoreM Core.State)
   let ctxMeta : Meta.Context ← monadLift (read : MetaM _)
   let sMeta : Meta.State ← monadLift (get : MetaM _)
   let ctx ← readThe Term.Context
-  let x ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter goal draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
+  let x ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter duplicate draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
 
 
 @[implemented_by elabTypeWriteImpl]
@@ -156,5 +123,6 @@ opaque elabTypeWrite : TacticM Unit
 
 elab "typewrite" : tactic => elabTypeWrite
 
+example : 0 = 0 := by grind
 example : 0 + n = n ^ n := by
   typewrite
