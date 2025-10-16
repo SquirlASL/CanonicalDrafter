@@ -49,14 +49,26 @@ export default function (props) {
 
   return React.createElement(
     'form',
-    { onSubmit: onEnter },
-    React.createElement(InteractiveMessageData, {"msg": out}),
+    { onSubmit: onEnter, style: { width: '100%' } },
+    React.createElement('br'),
+    React.createElement(InteractiveMessageData, { msg: out }),
     React.createElement('input', {
       type: 'text',
       value: value,
       onChange: (e) => setValue(e.target.value),
       placeholder: 'Type',
+      style: {
+        width: '100%',
+        padding: '10px 10px',
+        fontSize: '16px',
+        borderRadius: '12px',
+        border: '1px solid #ccc',
+        outline: 'none',
+        boxSizing: 'border-box',
+        margin: '8px 0',
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace'
+      },
     }),
-    React.createElement(InteractiveMessageData, {"msg": err})
+    React.createElement(InteractiveMessageData, { msg: err })
   );
 }
