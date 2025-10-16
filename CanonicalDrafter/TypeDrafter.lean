@@ -28,7 +28,16 @@ def RpcChannel.new : IO RpcChannel := do
   let ref ← IO.mkRef ("" : MessageData)
   return { channel := chan, lastMessage := ref }
 
-partial def drafter (goal : MVarId) (draftIn draftOut draftErr : RpcChannel): TermElabM (Option Expr) := do
+partial def userTerm (goal : MVarId) (draftIn draftOut draftErr : RpcChannel) : TermElabM (String × Expr) := do
+  let type ← draftIn.channel.recv
+  let (name, draft) : String × String := ("test", (← type.format).pretty)
+  try
+    return (name, ← elabStringAsExpr draft)
+  catch e =>
+    draftErr.send e.toMessageData
+    return ← userTerm goal draftIn draftOut draftErr
+
+partial def drafter (goal : MVarId) (draftIn draftOut draftErr : RpcChannel) : TermElabM (Option Expr) := do
   -- if we exceed bounds then return none
   -- let goal ← introNP goal (typeArity1 goal.getType)
   -- exposeNames?
@@ -46,20 +55,16 @@ partial def drafter (goal : MVarId) (draftIn draftOut draftErr : RpcChannel): Te
     if remaining.isEmpty then
       return ← instantiateMVars duplicate -- return the `aesop` syntax
 
-    -- attempt closers (in parallel)
-    let type ← draftIn.channel.recv
-    let (name, draft) : String × String := ("test", (← type.format).pretty) -- ← letDrafter input
-    try
-      let output ← elabStringAsExpr draft
-      let subgoal ← mkFreshExprMVar output
-      let (x, newGoal) ← goal.note name.toName subgoal
-      if let some value ← drafter subgoal.mvarId! draftIn draftOut draftErr then
-        if let some body ← drafter newGoal draftIn draftOut draftErr then
-          return some (.letE name.toName output value
-            (body.abstract #[.fvar x]) false)
-    catch e =>
-      draftErr.send e.toMessageData
+    let (name, output) ← userTerm goal draftIn draftOut draftErr
+    let subgoal ← mkFreshExprMVar output
+    let (x, newGoal) ← goal.note name.toName subgoal
+    if let some value ← drafter subgoal.mvarId! draftIn draftOut draftErr then
+      if let some body ← drafter newGoal draftIn draftOut draftErr then
+        return some (.letE name.toName output value
+          (body.abstract #[.fvar x]) false)
     return none
+  -- attempt closers (in parallel)
+
 
 open Server RequestM
 
