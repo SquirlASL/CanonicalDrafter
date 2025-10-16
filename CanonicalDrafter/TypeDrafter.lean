@@ -10,8 +10,7 @@ def elabStringAsExpr (code : String) : TermElabM Expr := do
   let stx := (Parser.runParserCategory (← getEnv) `term code).toOption.get!
   -- elaborate it into an expression
   withoutErrToSorry do
-    let expr ← elabTerm stx none
-    return expr
+    elabTermAndSynthesize stx none
 
 def printForce (s : String) : IO Unit := do
   let handle ← IO.FS.Handle.mk "output.txt" IO.FS.Mode.append
@@ -123,6 +122,6 @@ opaque elabTypeWrite : TacticM Unit
 
 elab "typewrite" : tactic => elabTypeWrite
 
-example : 0 = 0 := by grind
+def x : 0 = 0 := by grind
 example : 0 + n = n ^ n := by
   typewrite
