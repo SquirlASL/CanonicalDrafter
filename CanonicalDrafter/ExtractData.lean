@@ -86,15 +86,7 @@ structure HaveDraft where
   removals : Array String
   deriving ToJson
 
-/--
-The trace of a Lean file.
--/
-structure Trace where
-  haveDrafts : Array HaveDraft   -- All have drafts in the file
-deriving ToJson
-
-
-abbrev TraceM := StateT Trace TermElabM
+abbrev TraceM := StateT (Std.HashMap MVarId MVarId) MetaM
 
 namespace Pp
 
@@ -145,7 +137,7 @@ def goalCopy (goal : MVarId) : MetaM MVarId := do
 -/
 def haveDrafts
   (goalsBefore : List MVarId)
-  (goalsAfter : List MVarId) (tacticText : String) : MetaM (Array HaveDraft) :=
+  (goalsAfter : List MVarId) (tacticText : String) :  TraceM (Array HaveDraft) :=
   let intersection := goalsBefore.filter (fun g => goalsAfter.contains g)
   let goalsBefore := goalsBefore.filter (fun g => !intersection.contains g)
   let goalsAfter := goalsAfter.filter (fun g => !intersection.contains g)
@@ -395,7 +387,7 @@ def findTacticNodes' (t : InfoTree) : IO (List (TacticInfo × ContextInfo × Lis
   | (i, some ctx, rootGoals) => (i, ctx, rootGoals)
   | _ => none
 
-def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveDraft) := do
+def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : TraceM (Array HaveDraft) := do
   let (pb, pa) := stxRange ctx.fileMap ti.stx
   let pb := ctx.fileMap.ofPosition pb
   let pa := ctx.fileMap.ofPosition pa
@@ -451,6 +443,17 @@ def tacticToHaveDraft (ti : TacticInfo) (ctx : ContextInfo) : MetaM (Array HaveD
     else
       return ← haveDrafts ti.goalsBefore ti.goalsAfter tacticText
 
+def Array.flatMapAccumM
+    {m : Type → Type} [Monad m]
+    {α β σ}
+    (f : σ → α → m (σ × Array β))
+    (init : σ)
+    (as : Array α)
+    : m (σ × Array β) := do
+  as.foldlM (init := (init, #[])) fun (s, out) a => do
+    let (s', bs) ← f s a
+    return (s', out ++ bs)
+
 /--
 Trace a *.lean file.
 -/
@@ -465,11 +468,14 @@ unsafe def processFile (path : FilePath) : IO Unit := do
 
   let tactics := (← trees.flatMapM (findTacticNodes')).toArray
 
-  let drafts ← tactics.flatMapM (fun ⟨ti, ctx, _⟩ => ctx.runMetaM {} do MonadWithOptions.withOptions Pp.applyOptions do try
-    tacticToHaveDraft ti ctx
+  let map : Std.HashMap MVarId MVarId := {}
+
+  let ⟨_, drafts⟩ ← tactics.flatMapAccumM (fun map ⟨ti, ctx, _⟩ => ctx.runMetaM {} do MonadWithOptions.withOptions Pp.applyOptions do try
+    let (drafts, x) ← (tacticToHaveDraft ti ctx).run map
+    pure ⟨x, drafts⟩
   catch e =>
     IO.println s!"WARNING: Failed to process tactic {stxRange ctx.fileMap ti.stx}: {← e.toMessageData.format}";
-    pure #[])
+    pure ⟨map, #[]⟩) map
   let trace := drafts.toJson
   let cwd ← IO.currentDir
   assert! cwd.fileName != "lean4"
