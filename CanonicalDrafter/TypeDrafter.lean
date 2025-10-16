@@ -14,14 +14,28 @@ def printForce (s : String) : IO Unit := do
   handle.putStrLn s
   handle.flush
 
-unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync MessageData): TermElabM (Option Expr) := do
+structure RpcChannel where
+  channel : Std.Channel.Sync MessageData
+  lastMessage : IO.Ref MessageData
+deriving TypeName
+
+def RpcChannel.send (c : RpcChannel) (msg : MessageData) : IO Unit := do
+  c.channel.send msg
+  c.lastMessage.set msg
+
+def RpcChannel.new : IO RpcChannel := do
+  let chan ← Std.Channel.Sync.new (α := MessageData)
+  let ref ← IO.mkRef ("" : MessageData)
+  return { channel := chan, lastMessage := ref }
+
+partial def drafter (goal : MVarId) (draftIn draftOut draftErr : RpcChannel): TermElabM (Option Expr) := do
   -- if we exceed bounds then return none
   -- let goal ← introNP goal (typeArity1 goal.getType)
   -- exposeNames?
   goal.withContext do
     let mdc := MessageDataContext.mk (← getEnv) (← getMCtx) (← getLCtx) (← getOptions)
     draftOut.send (MessageData.withContext mdc goal)
-    let duplicate := ← mkFreshExprMVar (← goal.getType)
+    let duplicate ← mkFreshExprMVar (← goal.getType)
     let remaining ←
       try
         let (remaining, _stats) ← Aesop.search duplicate.mvarId!
@@ -33,7 +47,7 @@ unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync
       return ← instantiateMVars duplicate -- return the `aesop` syntax
 
     -- attempt closers (in parallel)
-    let type ← draftIn.recv
+    let type ← draftIn.channel.recv
     let (name, draft) : String × String := ("test", (← type.format).pretty) -- ← letDrafter input
     try
       let output ← elabStringAsExpr draft
@@ -47,10 +61,6 @@ unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync
       draftErr.send e.toMessageData
     return none
 
-structure RpcChannel where
-  channel : Std.Channel.Sync MessageData
-deriving TypeName
-
 open Server RequestM
 
 structure SendParams where
@@ -62,7 +72,7 @@ deriving Server.RpcEncodable
 @[server_rpc_method]
 def send (params : SendParams) : RequestM (RequestTask Json) := do
   withWaitFindSnapAtPos params.pos fun snap => runTermElabM snap do
-    params.channel.val.channel.send params.text
+    params.channel.val.send params.text
     return default
 
 structure RecvParams where
@@ -79,19 +89,22 @@ def recv (params : RecvParams) : RequestM (RequestTask RpcMessageData) := do
   withWaitFindSnapAtPos params.pos fun snap => runTermElabM snap do
     return ⟨← Server.WithRpcRef.mk (← params.channel.val.channel.recv)⟩
 
+@[server_rpc_method]
+def last (params : RecvParams) : RequestM (RequestTask RpcMessageData) := do
+  withWaitFindSnapAtPos params.pos fun snap => runTermElabM snap do
+    return ⟨← Server.WithRpcRef.mk (← params.channel.val.lastMessage.get)⟩
+
 @[widget_module]
 def refineWidget : Widget.Module where
   javascript := include_str "TypeDrafter.js"
 
 open Lean Meta Elab Tactic
 
-#check MessageData.ofGoal
-
-unsafe def elabTypeWriteImpl : TacticM Unit := do
-  let draftIn ← Std.Channel.Sync.new (α := MessageData)
-  let draftOut ← Std.Channel.Sync.new (α := MessageData)
-  let draftErr ← Std.Channel.Sync.new (α := MessageData)
-  let channelRefs ← [draftIn, draftOut, draftErr].mapM (fun c => Server.WithRpcRef.mk (RpcChannel.mk c))
+elab "typewrite" : tactic => do
+  let draftIn ← RpcChannel.new
+  let draftOut ← RpcChannel.new
+  let draftErr ← RpcChannel.new
+  let channelRefs ← [draftIn, draftOut, draftErr].mapM (fun c => Server.WithRpcRef.mk c)
   let emptyMessage ← Server.WithRpcRef.mk ("" : MessageData)
   Lean.Widget.savePanelWidgetInfo (hash refineWidget.javascript) (← getRef)
     (props := do
@@ -109,12 +122,5 @@ unsafe def elabTypeWriteImpl : TacticM Unit := do
   let ctx ← readThe Term.Context
   let _ ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter duplicate draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
 
-
-@[implemented_by elabTypeWriteImpl]
-opaque elabTypeWrite : TacticM Unit
-
-
-elab "typewrite" : tactic => elabTypeWrite
-
-example : 0 + n = n ^ n := by
+example (a b : Nat) : a + b = b + a := by
   typewrite

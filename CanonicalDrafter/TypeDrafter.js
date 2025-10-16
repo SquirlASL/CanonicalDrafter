@@ -35,6 +35,15 @@ export default function (props) {
     };
   }, []);
 
+  React.useEffect(() => {
+    (async () => {
+      const outRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftOut })
+      setOut(outRes.response)
+      const errRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftErr })
+      setErr(errRes.response)
+    })()
+  }, [rs, props.pos, props.draftOut]);
+
   const onEnter = async (e) => {
     e.preventDefault();
     await rs.call('Typewriter.send', { pos: pos, text: value, channel: props.draftIn });
@@ -44,14 +53,12 @@ export default function (props) {
     'form',
     { onSubmit: onEnter },
     React.createElement(InteractiveMessageData, {"msg": out}),
-    React.createElement('br'),
-    React.createElement(InteractiveMessageData, {"msg": err}),
-    React.createElement('br'),
     React.createElement('input', {
       type: 'text',
       value: value,
       onChange: (e) => setValue(e.target.value),
-      placeholder: 'Type something and press Enter…',
-    })
+      placeholder: 'Type',
+    }),
+    React.createElement(InteractiveMessageData, {"msg": err})
   );
 }
