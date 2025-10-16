@@ -11,6 +11,13 @@ export default function (props) {
   const [err, setErr] = React.useState(props.empty.response);
 
   React.useEffect(() => {
+    (async () => {
+      const outRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftOut })
+      setOut(outRes.response)
+      const errRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftErr })
+      setErr(errRes.response)
+    })()
+
     let run = true;
     async function pollOut(){
       while (run) {
@@ -34,15 +41,6 @@ export default function (props) {
       run = false;
     };
   }, []);
-
-  React.useEffect(() => {
-    (async () => {
-      const outRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftOut })
-      setOut(outRes.response)
-      const errRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftErr })
-      setErr(errRes.response)
-    })()
-  }, [rs, props.pos, props.draftOut]);
 
   const onEnter = async (e) => {
     e.preventDefault();
