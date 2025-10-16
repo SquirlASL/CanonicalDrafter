@@ -6,32 +6,27 @@ open Lean Meta Elab Term Expr Meta Tactic
 namespace Typewriter
 
 def elabStringAsExpr (code : String) : TermElabM Expr := do
-  -- parse the string as a syntax tree
   let stx := (Parser.runParserCategory (← getEnv) `term code).toOption.get!
-  -- elaborate it into an expression
-  withoutErrToSorry do
-    elabTermAndSynthesize stx none
+  withoutErrToSorry do elabTermAndSynthesize stx none
 
 def printForce (s : String) : IO Unit := do
   let handle ← IO.FS.Handle.mk "output.txt" IO.FS.Mode.append
   handle.putStrLn s
   handle.flush
 
-unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync String): TermElabM (Option Expr) := do
+unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync MessageData): TermElabM (Option Expr) := do
   -- if we exceed bounds then return none
   -- let goal ← introNP goal (typeArity1 goal.getType)
   -- exposeNames?
   goal.withContext do
-    draftOut.send (← Meta.ppGoal goal).pretty
+    let mdc := MessageDataContext.mk (← getEnv) (← getMCtx) (← getLCtx) (← getOptions)
+    draftOut.send (MessageData.withContext mdc goal)
     let duplicate := ← mkFreshExprMVar (← goal.getType)
     let remaining ←
       try
-        let config ← Aesop.Frontend.TacticConfig.parse (← `(tactic| aesop)) duplicate.mvarId!
-        let (remaining, stats) ← Aesop.search duplicate.mvarId! (← config.getRuleSet duplicate.mvarId!) config.options config.simpConfig
-            config.simpConfigSyntax?
+        let (remaining, _stats) ← Aesop.search duplicate.mvarId!
         pure remaining
-      catch e =>
-        draftErr.send (← e.toMessageData.format).pretty
+      catch _ =>
         pure #[duplicate.mvarId!]
 
     if remaining.isEmpty then
@@ -39,8 +34,7 @@ unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync
 
     -- attempt closers (in parallel)
     let type ← draftIn.recv
-    let (name, draft) : String × String := ("test", type) -- ← letDrafter input
-    -- printForce "wee"
+    let (name, draft) : String × String := ("test", (← type.format).pretty) -- ← letDrafter input
     try
       let output ← elabStringAsExpr draft
       let subgoal ← mkFreshExprMVar output
@@ -50,12 +44,11 @@ unsafe def drafter (goal : MVarId) (draftIn draftOut draftErr : Std.Channel.Sync
           return some (.letE name.toName output value
             (body.abstract #[.fvar x]) false)
     catch e =>
-      draftErr.send (← e.toMessageData.format).pretty
-    -- printForce "womp"
+      draftErr.send e.toMessageData
     return none
 
 structure RpcChannel where
-  channel : Std.Channel.Sync String
+  channel : Std.Channel.Sync MessageData
 deriving TypeName
 
 open Server RequestM
@@ -77,17 +70,14 @@ structure RecvParams where
   channel : Server.WithRpcRef RpcChannel
 deriving Server.RpcEncodable
 
-structure RpcString where
-  response : String
+structure RpcMessageData where
+  response : Server.WithRpcRef MessageData
 deriving Lean.Server.RpcEncodable
 
 @[server_rpc_method]
-def recv (params : RecvParams) : RequestM (RequestTask RpcString) := do
+def recv (params : RecvParams) : RequestM (RequestTask RpcMessageData) := do
   withWaitFindSnapAtPos params.pos fun snap => runTermElabM snap do
-    printForce "recv"
-    let temp ← params.channel.val.channel.recv
-    printForce temp
-    return ⟨temp⟩
+    return ⟨← Server.WithRpcRef.mk (← params.channel.val.channel.recv)⟩
 
 @[widget_module]
 def refineWidget : Widget.Module where
@@ -95,15 +85,19 @@ def refineWidget : Widget.Module where
 
 open Lean Meta Elab Tactic
 
+#check MessageData.ofGoal
+
 unsafe def elabTypeWriteImpl : TacticM Unit := do
-  let draftIn ← Std.Channel.Sync.new (α := String)
-  let draftOut ← Std.Channel.Sync.new (α := String)
-  let draftErr ← Std.Channel.Sync.new (α := String)
+  let draftIn ← Std.Channel.Sync.new (α := MessageData)
+  let draftOut ← Std.Channel.Sync.new (α := MessageData)
+  let draftErr ← Std.Channel.Sync.new (α := MessageData)
   let channelRefs ← [draftIn, draftOut, draftErr].mapM (fun c => Server.WithRpcRef.mk (RpcChannel.mk c))
+  let emptyMessage ← Server.WithRpcRef.mk ("" : MessageData)
   Lean.Widget.savePanelWidgetInfo (hash refineWidget.javascript) (← getRef)
     (props := do
+      let emptyMessage ← Server.RpcEncodable.rpcEncode (RpcMessageData.mk emptyMessage)
       let encoded ← channelRefs.mapM (fun c => Server.RpcEncodable.rpcEncode c)
-      pure (Json.mkObj (["draftIn", "draftOut", "draftErr"].zip encoded)))
+      pure (Json.mkObj (("empty", emptyMessage) :: (["draftIn", "draftOut", "draftErr"].zip encoded))))
 
   let goal ← getMainGoal
   goal.admit
@@ -113,7 +107,7 @@ unsafe def elabTypeWriteImpl : TacticM Unit := do
   let ctxMeta : Meta.Context ← monadLift (read : MetaM _)
   let sMeta : Meta.State ← monadLift (get : MetaM _)
   let ctx ← readThe Term.Context
-  let x ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter duplicate draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
+  let _ ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter duplicate draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
 
 
 @[implemented_by elabTypeWriteImpl]
@@ -122,6 +116,5 @@ opaque elabTypeWrite : TacticM Unit
 
 elab "typewrite" : tactic => elabTypeWrite
 
-def x : 0 = 0 := by grind
 example : 0 + n = n ^ n := by
   typewrite

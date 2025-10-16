@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useRpcSession, EditorContext, EnvPosContext } from '@leanprover/infoview';
+import { useRpcSession, EnvPosContext, InteractiveMessageData } from '@leanprover/infoview';
 
 export default function (props) {
   const pos = React.useContext(EnvPosContext);
@@ -7,8 +7,8 @@ export default function (props) {
 
   const [value, setValue] = React.useState('');
 
-  const [out, setOut] = React.useState('');
-  const [err, setErr] = React.useState('');
+  const [out, setOut] = React.useState(props.empty.response);
+  const [err, setErr] = React.useState(props.empty.response);
 
   React.useEffect(() => {
     let run = true;
@@ -16,7 +16,7 @@ export default function (props) {
       while (run) {
         const res = await rs.call('Typewriter.recv', { pos: pos, channel: props.draftOut });
         setValue('');
-        setErr('');
+        setErr(props.empty.response);
         setOut(res.response);
       }
     }
@@ -43,8 +43,10 @@ export default function (props) {
   return React.createElement(
     'form',
     { onSubmit: onEnter },
-    React.createElement('p', null, out),
-    React.createElement('p', { style: { color: 'red' } }, err),
+    React.createElement(InteractiveMessageData, {"msg": out}),
+    React.createElement('br'),
+    React.createElement(InteractiveMessageData, {"msg": err}),
+    React.createElement('br'),
     React.createElement('input', {
       type: 'text',
       value: value,
