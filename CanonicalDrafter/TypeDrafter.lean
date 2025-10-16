@@ -5,9 +5,26 @@ open Lean Meta Elab Term Expr Meta Tactic
 
 namespace Typewriter
 
+def Task.race {α β} [Inhabited (α ⊕ β)] (ta : Task (Except IO.Error α)) (tb : Task (Except IO.Error β)) : IO (α ⊕ β) := do
+  let p ← IO.Promise.new
+  let _ ← IO.asTask do if let .ok a := ta.get then p.resolve (Sum.inl a)
+  let _ ← IO.asTask do if let .ok b := tb.get then p.resolve (Sum.inr b)
+  return p.result?.get.get!
+
+def toTask (x : TermElabM α) : TermElabM (Task (Except IO.Error α)) := do
+  let ctxCore : Core.Context ← monadLift (read : CoreM Core.Context)
+  let sCore : Core.State ← monadLift (get : CoreM Core.State)
+  let ctxMeta : Meta.Context ← monadLift (read : MetaM _)
+  let sMeta : Meta.State ← monadLift (get : MetaM _)
+  let ctx ← readThe Term.Context
+  return ← IO.asTask (do
+    let (a, _) ← Lean.Elab.Term.TermElabM.toIO x ctxCore sCore ctxMeta sMeta ctx {}
+    return a)
+
 def elabStringAsExpr (code : String) : TermElabM Expr := do
-  let stx := (Parser.runParserCategory (← getEnv) `term code).toOption.get!
-  withoutErrToSorry do elabTermAndSynthesize stx none
+  match (Parser.runParserCategory (← getEnv) `term code) with
+  | Except.error err => throwError err
+  | Except.ok stx => withoutErrToSorry do elabTermAndSynthesize stx none
 
 def printForce (s : String) : IO Unit := do
   let handle ← IO.FS.Handle.mk "output.txt" IO.FS.Mode.append
@@ -120,12 +137,7 @@ elab "typewrite" : tactic => do
   let goal ← getMainGoal
   goal.admit
   let duplicate := (← mkFreshExprMVar (← goal.getType)).mvarId!
-  let ctxCore : Core.Context ← monadLift (read : CoreM Core.Context)
-  let sCore : Core.State ← monadLift (get : CoreM Core.State)
-  let ctxMeta : Meta.Context ← monadLift (read : MetaM _)
-  let sMeta : Meta.State ← monadLift (get : MetaM _)
-  let ctx ← readThe Term.Context
-  let _ ← IO.asTask (Lean.Elab.Term.TermElabM.toIO (drafter duplicate draftIn draftOut draftErr) ctxCore sCore ctxMeta sMeta ctx {})
+  let _ ← toTask (drafter duplicate draftIn draftOut draftErr)
 
 example (a b : Nat) : a + b = b + a := by
   typewrite

@@ -14,11 +14,10 @@ export default function (props) {
     (async () => {
       const outRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftOut })
       setOut(outRes.response)
-      const errRes = await rs.call("Typewriter.last", { pos: props.pos, channel: props.draftErr })
-      setErr(errRes.response)
     })()
 
     let run = true;
+    // TODO convert these to poll? We are not able to cancel the recv call for persistence.
     async function pollOut(){
       while (run) {
         const res = await rs.call('Typewriter.recv', { pos: pos, channel: props.draftOut });
@@ -37,9 +36,7 @@ export default function (props) {
     pollOut();
     pollErr();
 
-    return () => {
-      run = false;
-    };
+    return () => { run = false; };
   }, []);
 
   const onEnter = async (e) => {
