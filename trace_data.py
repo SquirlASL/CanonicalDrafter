@@ -8,8 +8,29 @@ import subprocess
 
 # note for this script to work you will need to add lean repl as a depency to the project you are tracing
 
-root = "/home/frederick/mathlib4"
+root = "CanonicalDrafter"
 initial_path = f"{root}/Mathlib.lean"
+
+lake_setup_shell = """
+lake exe cache get
+lake build REPL
+TOOLCHAIN_DIR=$(lean --print-prefix)
+TARGET_DIR=".lake/packages/lean4"
+
+mkdir -p "$TARGET_DIR"
+cp -r "$TOOLCHAIN_DIR"/* "$TARGET_DIR"
+"""
+
+result = subprocess.run(
+    lake_setup_shell, 
+    shell=True,
+    check=True,  
+    text=True,
+    capture_output=True,
+    cwd=root
+)
+
+print(result)
 
 seen = set()
 seen_lock = Lock()
