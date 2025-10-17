@@ -1,7 +1,7 @@
 [{"type": "∀ L ∈ s, ∀ U ∈ upperBounds s, ∃ (x : ℝ), IsLUB s x",
   "tactic": "rcases hne, hbdd with ⟨⟨L, hL⟩, ⟨U, hU⟩⟩",
   "removals": ["hne", "hbdd"],
-  "name": "intro",
+  "name": "rcases",
   "kind": "goal",
   "goal":
   "s : Set ℝ\nhne : s.Nonempty\nhbdd : BddAbove s\n⊢ ∃ (x : ℝ), IsLUB s x"},
@@ -24,28 +24,28 @@
   "∀ (d : ℕ), ∀ z ∈ {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}, z ≤ k * (↑d : ℤ)",
   "tactic": "refine fun d => ⟨k * d, fun z h => ?_⟩",
   "removals": [],
-  "name": "intro",
+  "name": "refine",
   "kind": "goal",
   "goal":
   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\n⊢ ∀ (d : ℕ), BddAbove {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}"},
  {"type": "∀ y ∈ s, (↑z : ℝ) ≤ y * (↑d : ℝ) → z ≤ k * (↑d : ℤ)",
   "tactic": "rcases h with ⟨y, yS, hy⟩",
   "removals": ["h"],
-  "name": "intro",
+  "name": "rcases",
   "kind": "goal",
   "goal":
   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\nh : z ∈ {m : ℤ | ∃ y ∈ s, (↑m : ℝ) ≤ y * (↑d : ℝ)}\n⊢ z ≤ k * (↑d : ℤ)"},
  {"type": "y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)",
   "tactic": "refine Int.cast_le.1 (hy.trans ?_)",
   "removals": [],
-  "name": "intro",
+  "name": "refine",
   "kind": "goal",
   "goal":
   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ z ≤ k * (↑d : ℤ)"},
  {"type": "y * (↑d : ℝ) ≤ (↑k : ℝ) * (↑d : ℝ)",
   "tactic": "push_cast",
   "removals": [],
-  "name": "intro",
+  "name": "push_cast",
   "kind": "goal",
   "goal":
   "s : Set ℝ\nL : ℝ\nhL : L ∈ s\nU : ℝ\nhU : U ∈ upperBounds s\nk : ℤ\nhk : U < (↑k : ℝ)\nd : ℕ\nz : ℤ\ny : ℝ\nyS : y ∈ s\nhy : (↑z : ℝ) ≤ y * (↑d : ℝ)\n⊢ y * (↑d : ℝ) ≤ (↑(k * (↑d : ℤ)) : ℝ)"}]

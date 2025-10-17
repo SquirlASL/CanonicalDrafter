@@ -1,5 +1,4 @@
 import Mathlib
-import Canonical
 
 open Real
 open Pointwise CauSeq

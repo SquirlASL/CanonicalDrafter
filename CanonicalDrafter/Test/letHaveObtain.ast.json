@@ -39,7 +39,7 @@
  {"type": "∀ (test1 : Nat), test1 = test1 → 2 + 2 = 4",
   "tactic": "let ⟨test1, test2⟩ := bruh",
   "removals": [],
-  "name": "intro",
+  "name": "let",
   "kind": "goal",
   "goal":
   "i : Nat\nhi : i < 3\na : 2 = 2\nb : 3 = 3\nbruh : ∃ (x : Nat), x = x\n⊢ 2 + 2 = 4"},
